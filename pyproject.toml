@@ -1,0 +1,26 @@
+[project]
+name = "crawlspace"
+version = "0.1.0"
+description = "NEWBI Marketing SEO audit agent"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx[http2]>=0.27",
+    "protego>=0.3",
+    "selectolax>=0.3.21",
+    "tenacity>=8.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Explicit, because flat-layout auto-discovery trips over the sibling
+# tests/ templates/ audits/ directories and refuses to install.
+[tool.setuptools]
+packages = ["crawlspace", "crawlspace.checks", "crawlspace.enrich"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
