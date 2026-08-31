@@ -29,6 +29,16 @@ BLOCK_ABORT_MIN_SAMPLE = 15
 # can reference thousands and check PRF-04 only needs the big ones found.
 MAX_IMAGE_HEADS = 400
 
+# Image sizing runs after the page crawl is finished, against static assets on
+# a CDN rather than page templates on the origin server — it does not need to
+# share the page crawl's politeness budget, and running it through that same
+# limiter serially (one HEAD request per `requests_per_second`) is what made a
+# 300-image site take minutes after the crawl itself had already finished.
+# A separate, less conservative limiter plus real concurrency instead of one
+# request at a time is the fix.
+IMAGE_SIZE_RPS = 8.0
+IMAGE_SIZE_CONCURRENCY = 8
+
 
 class CrawlBlocked(RuntimeError):
     """Raised when the host is refusing the crawler."""
@@ -234,27 +244,39 @@ class Crawler:
         appears on every page, and sizing it 300 times would be both slow and
         rude. One request per distinct URL, results shared back to every record
         that references it.
+
+        Runs on its own rate limiter and with real concurrency, not the page
+        crawl's `self.limiter` one-at-a-time — these are static-asset HEAD
+        requests against (usually) a CDN, made after the origin server is
+        already done being crawled, so the page crawl's politeness budget does
+        not apply here.
         """
         unique: dict[str, list] = {}
         for record in self.records:
             for image in record.images:
                 unique.setdefault(image.src, []).append(image)
 
-        for src in list(unique)[:MAX_IMAGE_HEADS]:
-            await self.limiter.acquire()
-            size = None
-            try:
-                response = await client.head(src, timeout=10.0)
-                if response.status_code == 405:      # some CDNs refuse HEAD
-                    response = await client.get(src, timeout=15.0)
-                if response.status_code == 200:
-                    length = response.headers.get("content-length")
-                    size = int(length) if length and length.isdigit() else None
-            except (httpx.HTTPError, ValueError):
+        limiter = RateLimiter(IMAGE_SIZE_RPS)
+        semaphore = asyncio.Semaphore(IMAGE_SIZE_CONCURRENCY)
+
+        async def size_one(src: str) -> None:
+            async with semaphore:
+                await limiter.acquire()
                 size = None
-            if size is not None:
-                for image in unique[src]:
-                    image.bytes = size
+                try:
+                    response = await client.head(src, timeout=10.0)
+                    if response.status_code == 405:      # some CDNs refuse HEAD
+                        response = await client.get(src, timeout=15.0)
+                    if response.status_code == 200:
+                        length = response.headers.get("content-length")
+                        size = int(length) if length and length.isdigit() else None
+                except (httpx.HTTPError, ValueError):
+                    size = None
+                if size is not None:
+                    for image in unique[src]:
+                        image.bytes = size
+
+        await asyncio.gather(*(size_one(src) for src in list(unique)[:MAX_IMAGE_HEADS]))
 
     def image_stats(self) -> dict:
         sized = [i for r in self.records for i in r.images if i.bytes]
