@@ -32,6 +32,9 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--concurrency", type=int, default=3)
     c.add_argument("--ignore-robots", action="store_true",
                    help="only for sites you own — never for a prospect")
+    c.add_argument("--no-render", action="store_true",
+                   help="skip Playwright; faster, but misses JS-built navigation")
+    c.add_argument("--render-timeout", type=float, default=15.0)
     c.add_argument("--out", default="audits")
 
     args = ap.parse_args(argv)
@@ -54,10 +57,13 @@ def main(argv: list[str] | None = None) -> int:
         requests_per_second=args.rps,
         concurrency=args.concurrency,
         obey_robots=not args.ignore_robots,
+        render_timeout_s=args.render_timeout,
     )
 
-    print(f"Crawling {root}  (cap {args.pages} pages, depth {args.depth}, {args.rps} req/s)")
-    crawler = Crawler(config, out_dir)
+    mode = "fetch only" if args.no_render else "fetch + render"
+    print(f"Crawling {root}  (cap {args.pages} pages, depth {args.depth}, "
+          f"{args.rps} req/s, {mode})")
+    crawler = Crawler(config, out_dir, render=not args.no_render)
 
     try:
         records = asyncio.run(crawler.run(on_progress=_progress))
@@ -80,6 +86,14 @@ def main(argv: list[str] | None = None) -> int:
         f"{k}: {v}" for k, v in sorted(statuses.items(), key=lambda x: (x[0] is None, x[0]))
     ))
     print("  frontier          " + ", ".join(f"{k}={v}" for k, v in crawler.frontier.stats().items()))
+
+    if not args.no_render:
+        rs = crawler.stats()
+        print(f"\n  rendered          {rs['rendered']}")
+        print(f"  render timeouts   {rs['render_timeouts']}")
+        print(f"  render failures   {rs['render_failures']}")
+        print(f"  JS-dependent      {rs['js_dependent']}  "
+              f"(rendered DOM >3x raw HTML — preview of check ONP-10)")
     print(f"\n  wrote {out_dir / 'pages.jsonl'}")
     return 0
 

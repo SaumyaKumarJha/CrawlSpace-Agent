@@ -1,23 +1,18 @@
 """HTTP fetch layer: one URL in, one PageRecord out.
 
-Day 1 deliberately stops at the raw response. Rendering is day 2, parsing is
-day 3. This module never looks inside the HTML except to pull links, so that
-the fetch layer can be tested without a parser existing.
+Stops at the raw response and the link list. Rendering lives in renderer.py,
+field extraction in parse.py — keeping them apart is what lets each be tested
+without the others existing.
 """
 from __future__ import annotations
 
-import re
 import time
 
 import httpx
 
 from .models import CrawlConfig, PageRecord
+from .parse import links_for_frontier
 from .politeness import RateLimiter, RobotsGate
-
-# Cheap link extraction so the frontier can be fed on day 1. parse.py replaces
-# this properly on day 3 — this regex is a scaffold, not the real thing.
-_HREF_RE = re.compile(rb"""<a\b[^>]*?\bhref\s*=\s*["']([^"'>]+)["']""", re.I)
-_BASE_RE = re.compile(rb"""<base\b[^>]*?\bhref\s*=\s*["']([^"'>]+)["']""", re.I)
 
 RETRY_STATUS = {429, 500, 502, 503, 504}
 
@@ -29,12 +24,18 @@ class Fetcher:
         self.robots = robots
 
     async def fetch(self, client: httpx.AsyncClient, url: str, *, depth: int,
-                    sources: list[str]) -> tuple[PageRecord, list[str]]:
+                    sources: list[str]) -> tuple[PageRecord, list[str], bytes]:
+        """Returns the record, the links found in the raw HTML, and the body.
+
+        The body comes back so the caller can store it without a second
+        request — re-fetching a client's page just to keep a copy is both rude
+        and slow.
+        """
         record = PageRecord(url=url, depth=depth, discovered_via=sources)
 
         if not self.robots.allowed(url):
             record.fetch_error = "blocked_by_robots"
-            return record, []
+            return record, [], b""
 
         body = b""
         started = time.perf_counter()
@@ -47,7 +48,7 @@ class Fetcher:
             except httpx.HTTPError as exc:
                 record.fetch_error = f"{type(exc).__name__}: {exc}"
                 if attempt == 2:
-                    return record, []
+                    return record, [], b""
                 continue
 
             if response.status_code in RETRY_STATUS and attempt < 2:
@@ -59,7 +60,7 @@ class Fetcher:
             break
 
         if response is None:
-            return record, []
+            return record, [], b""
 
         record.fetch_error = None
         record.response_ms = int((time.perf_counter() - started) * 1000)
@@ -77,30 +78,11 @@ class Fetcher:
         }
 
         if not record.is_html:
-            return record, []
+            return record, [], b""
 
         body = response.content
         record.raw_html_len = len(body)
-        return record, self._extract_links(body, record.final_url or url)
-
-    @staticmethod
-    def _extract_links(body: bytes, page_url: str) -> list[str]:
-        base_match = _BASE_RE.search(body)
-        base = page_url
-        if base_match:
-            try:
-                base = base_match.group(1).decode("utf-8", "ignore") or page_url
-            except Exception:
-                base = page_url
-        out: list[str] = []
-        for m in _HREF_RE.finditer(body):
-            try:
-                href = m.group(1).decode("utf-8", "ignore")
-            except Exception:
-                continue
-            if href:
-                out.append(href)
-        return out
+        return record, links_for_frontier(body, record.final_url or url), body
 
 
 def _http2_available() -> bool:

@@ -1,0 +1,13 @@
+<!doctype html><html><head><title>JS Page</title></head><body>
+<h1>Rendered by JavaScript</h1>
+<div id="app">Loading&hellip;</div>
+<script>
+  // Stands in for a Wix / React site: the real content and the navigation
+  // only exist after this runs. Raw HTML sees none of it.
+  var links = ["/blog/post-2.html", "/about.html", "/js-only.html"];
+  var html = "<nav>";
+  links.forEach(function (h) { html += '<a href="' + h + '">' + h + '</a>'; });
+  html += "</nav><article>" + "Organic ghee sourced from grass-fed cows. ".repeat(120) + "</article>";
+  document.getElementById("app").innerHTML = html;
+</script>
+</body></html>

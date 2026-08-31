@@ -1,15 +1,18 @@
+README.md
 pyproject.toml
 crawlspace/__init__.py
 crawlspace/cli.py
 crawlspace/crawler.py
 crawlspace/fetcher.py
 crawlspace/frontier.py
+crawlspace/htmlstore.py
 crawlspace/intake.py
 crawlspace/models.py
 crawlspace/narrate.py
 crawlspace/parse.py
 crawlspace/politeness.py
 crawlspace/render.py
+crawlspace/renderer.py
 crawlspace/score.py
 crawlspace/urlnorm.py
 crawlspace.egg-info/PKG-INFO
@@ -28,6 +31,8 @@ crawlspace/enrich/__init__.py
 crawlspace/enrich/crux.py
 crawlspace/enrich/gsc.py
 crawlspace/enrich/psi.py
+tests/test_extract_links.py
 tests/test_frontier.py
+tests/test_htmlstore.py
 tests/test_politeness.py
 tests/test_urlnorm.py

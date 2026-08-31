@@ -8,6 +8,7 @@ dependencies = [
     "protego>=0.3",
     "selectolax>=0.3.21",
     "tenacity>=8.2",
+    "playwright>=1.44",
 ]
 
 [project.optional-dependencies]

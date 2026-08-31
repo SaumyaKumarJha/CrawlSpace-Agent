@@ -116,6 +116,7 @@ class CrawlConfig:
     concurrency: int = 3
     requests_per_second: float = 1.5
     timeout_s: float = 20.0
+    render_timeout_s: float = 15.0
     obey_robots: bool = True
     user_agent: str = (
         "Mozilla/5.0 (compatible; CrawlspaceBot/1.0; +https://newbi.live/crawler)"
