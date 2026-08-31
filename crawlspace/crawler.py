@@ -10,7 +10,10 @@ from pathlib import Path
 import httpx
 
 from .fetcher import Fetcher, build_client
+from .intake import resolve_host
 from .parse import links_for_frontier, parse_into
+from .sitemaps import collect_sitemaps
+from .template import representative_urls, signature as template_signature
 from .frontier import Frontier
 from .htmlstore import HtmlStore
 from .models import CrawlConfig, PageRecord
@@ -44,16 +47,25 @@ class Crawler:
         self.renderer = None
 
         self.records: list[PageRecord] = []
+        self.host: object | None = None
+        self.sitemap = None
         self._blocked_responses = 0
         self._total_responses = 0
         self._render_failures = 0
         self._lock = asyncio.Lock()
 
     async def run(self, on_progress=None) -> list[PageRecord]:
-        self.frontier.add(self.root, depth=0, source="seed")
-
         async with AsyncExitStack() as stack:
             client = await stack.enter_async_context(build_client(self.config))
+
+            # Resolve the real host before anything else. Crawling the wrong
+            # variant makes every internal link look like a cross-host redirect.
+            self.host = await resolve_host(client, self.root)
+            if self.host.canonical != self.root:
+                self.root = self.host.canonical
+                self.frontier.root = self.root
+
+            self.frontier.add(self.root, depth=0, source="seed")
 
             if self.render_enabled:
                 from .renderer import Renderer  # imported lazily: playwright is heavy
@@ -70,8 +82,14 @@ class Crawler:
             delay = self.robots.crawl_delay(self.root)
             if delay:
                 self.limiter.set_min_interval(delay)
-            for sm in self.robots.sitemaps(self.root):
-                self._note_sitemap(sm)
+            # Sitemaps: seed the frontier from them so that anything listed
+            # but unlinked is still crawled — and recorded as sitemap-only,
+            # which is what makes the orphan check possible.
+            self.sitemap = await collect_sitemaps(
+                client, self.root, self.robots.sitemaps(self.root)
+            )
+            for url in self.sitemap.urls:
+                self.frontier.add(url, depth=1, source="sitemap")
 
             workers = [
                 asyncio.create_task(self._worker(client, on_progress))
@@ -111,8 +129,9 @@ class Crawler:
             # raw otherwise — parsing raw HTML on a JS site would report an
             # empty page that is not empty.
             if record.is_html:
-                parse_into(record, rendered_html or body.decode("utf-8", "replace"),
-                           self.root)
+                page_html = rendered_html or body.decode("utf-8", "replace")
+                parse_into(record, page_html, self.root)
+                record.template_signature = template_signature(page_html)
 
             async with self._lock:
                 self.records.append(record)
@@ -126,6 +145,7 @@ class Crawler:
                 for href in links:
                     self.frontier.add(href, depth=item.depth + 1,
                                       source="internal_link", base=base)
+                record.discovered_via = self.frontier.sources_for(record.url)
 
                 if len(self.records) % 10 == 0:
                     self._checkpoint()
@@ -170,9 +190,17 @@ class Crawler:
                 f"allowlist the CrawlspaceBot user-agent before re-running."
             )
 
-    def _note_sitemap(self, sitemap_url: str) -> None:
-        with (self.out_dir / "sitemaps.txt").open("a", encoding="utf-8") as fh:
-            fh.write(sitemap_url + "\n")
+    def orphans(self) -> list[str]:
+        crawled = {r.url for r in self.records if r.ok}
+        return self.frontier.orphans(crawled)
+
+    def templates(self) -> dict:
+        sigs = [r.template_signature for r in self.records if r.template_signature]
+        return {
+            "distinct": len(set(sigs)),
+            "pages_with_signature": len(sigs),
+            "representatives": representative_urls(self.records),
+        }
 
     def stats(self) -> dict:
         rendered = [r for r in self.records if r.rendered_html_len]
@@ -200,4 +228,17 @@ class Crawler:
         with (self.out_dir / "pages.jsonl").open("w", encoding="utf-8") as fh:
             for rec in self.records:
                 fh.write(json.dumps(asdict(rec), default=str) + "\n")
+
+        site = {
+            "root": self.root,
+            "host": asdict(self.host) if self.host else None,
+            "sitemap": asdict(self.sitemap) if self.sitemap else None,
+            "orphans": self.orphans(),
+            "templates": self.templates(),
+            "frontier": self.frontier.stats(),
+            "trap_reasons": self.frontier.trap_reasons,
+            "discovery": self.frontier.discovery_sources(),
+        }
+        (self.out_dir / "site.json").write_text(
+            json.dumps(site, indent=2, default=str), encoding="utf-8")
         self._checkpoint()

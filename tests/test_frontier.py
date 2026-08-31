@@ -55,3 +55,31 @@ def test_page_cap_stops_dispatch():
     assert f.pop() is not None
     assert f.pop() is not None
     assert f.pop() is None
+
+
+class TestOrphansAndTraps:
+    def test_sitemap_only_url_is_an_orphan(self):
+        f = make()
+        f.add("https://a.com/hidden", depth=1, source="sitemap")
+        assert f.orphans({"https://a.com/hidden"}) == ["https://a.com/hidden"]
+
+    def test_linked_url_is_not_an_orphan(self):
+        f = make()
+        f.add("https://a.com/p", depth=1, source="sitemap")
+        f.add("https://a.com/p", depth=1, source="internal_link")
+        assert f.orphans({"https://a.com/p"}) == []
+
+    def test_uncrawled_url_is_not_reported_as_orphan(self):
+        f = make()
+        f.add("https://a.com/hidden", depth=1, source="sitemap")
+        assert f.orphans(set()) == []
+
+    def test_trap_urls_are_rejected(self):
+        f = make()
+        assert not f.add("https://a.com/cart", depth=1, source="internal_link")
+        assert f.stats()["skipped_traps"] == 1
+
+    def test_trap_reason_is_recorded(self):
+        f = make()
+        f.add("https://a.com/checkout/", depth=1, source="internal_link")
+        assert f.trap_reasons

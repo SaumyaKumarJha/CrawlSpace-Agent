@@ -87,6 +87,30 @@ def main(argv: list[str] | None = None) -> int:
     ))
     print("  frontier          " + ", ".join(f"{k}={v}" for k, v in crawler.frontier.stats().items()))
 
+    sm = crawler.sitemap
+    if sm:
+        print(f"\n  sitemaps read     {len(sm.sources)}")
+        print(f"  sitemap urls      {len(sm.urls)}")
+        if not sm.exists:
+            print("  sitemap           NONE FOUND")
+        elif not sm.referenced_in_robots:
+            print("  sitemap           found, but not declared in robots.txt")
+
+    host = crawler.host
+    if host and host.notes:
+        for note in host.notes:
+            print(f"  host              {note}")
+
+    orphans = crawler.orphans()
+    tpl = crawler.templates()
+    print(f"\n  orphan pages      {len(orphans)}  (in sitemap, no internal links)")
+    print(f"  templates         {tpl['distinct']} distinct across "
+          f"{tpl['pages_with_signature']} pages")
+    if crawler.frontier.trap_reasons:
+        top = sorted(crawler.frontier.trap_reasons.items(),
+                     key=lambda kv: -kv[1])[:3]
+        print("  traps skipped     " + "; ".join(f"{n}x {r}" for r, n in top))
+
     if not args.no_render:
         rs = crawler.stats()
         print(f"\n  rendered          {rs['rendered']}")
@@ -95,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  JS-dependent      {rs['js_dependent']}  "
               f"(rendered DOM >3x raw HTML — preview of check ONP-10)")
     print(f"\n  wrote {out_dir / 'pages.jsonl'}")
+    print(f"  wrote {out_dir / 'site.json'}")
     return 0
 
 

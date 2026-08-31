@@ -4,7 +4,8 @@ from __future__ import annotations
 import heapq
 from dataclasses import dataclass
 
-from .urlnorm import normalise, same_site, looks_non_html
+from .traps import is_trap
+from .urlnorm import looks_non_html, normalise, same_site
 
 
 @dataclass(slots=True, order=True)
@@ -34,6 +35,8 @@ class Frontier:
         self.skipped_offsite = 0
         self.skipped_depth = 0
         self.skipped_non_html = 0
+        self.skipped_traps = 0
+        self.trap_reasons: dict[str, int] = {}
 
     def __len__(self) -> int:
         return len(self._heap)
@@ -64,6 +67,12 @@ class Frontier:
             self.skipped_depth += 1
             return False
 
+        trapped, reason = is_trap(norm)
+        if trapped:
+            self.skipped_traps += 1
+            self.trap_reasons[reason] = self.trap_reasons.get(reason, 0) + 1
+            return False
+
         self._seen.add(norm)
         self._sources[norm] = {source}
         heapq.heappush(self._heap, QueueItem(depth=depth, url=norm, source=source))
@@ -86,4 +95,20 @@ class Frontier:
             "skipped_offsite": self.skipped_offsite,
             "skipped_depth": self.skipped_depth,
             "skipped_non_html": self.skipped_non_html,
+            "skipped_traps": self.skipped_traps,
         }
+
+    def orphans(self, crawled: set[str]) -> list[str]:
+        """URLs known only from the sitemap — nothing on the site links to them.
+
+        The frontier is the only place that knows this, because it is the only
+        thing that records *how* each URL was discovered.
+        """
+        out = []
+        for url, sources in self._sources.items():
+            if url in crawled and sources == {"sitemap"}:
+                out.append(url)
+        return sorted(out)
+
+    def discovery_sources(self) -> dict[str, list[str]]:
+        return {url: sorted(src) for url, src in self._sources.items()}
