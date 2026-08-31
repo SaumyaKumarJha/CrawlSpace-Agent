@@ -117,6 +117,9 @@ class CrawlConfig:
     requests_per_second: float = 1.5
     timeout_s: float = 20.0
     render_timeout_s: float = 15.0
+    render_settle_ms: int = 1500
+    http2: bool = False
+    size_images: bool = True
     obey_robots: bool = True
     user_agent: str = (
         "Mozilla/5.0 (compatible; CrawlspaceBot/1.0; +https://newbi.live/crawler)"

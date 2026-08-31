@@ -37,6 +37,7 @@ class Frontier:
         self.skipped_non_html = 0
         self.skipped_traps = 0
         self.trap_reasons: dict[str, int] = {}
+        self.offsite_urls: set[str] = set()
 
     def __len__(self) -> int:
         return len(self._heap)
@@ -58,7 +59,8 @@ class Frontier:
             return False
 
         if not same_site(norm, self.root):
-            self.skipped_offsite += 1
+            self.skipped_offsite += 1        # link instances, not unique URLs
+            self.offsite_urls.add(norm)
             return False
         if looks_non_html(norm):
             self.skipped_non_html += 1
@@ -96,14 +98,31 @@ class Frontier:
             "skipped_depth": self.skipped_depth,
             "skipped_non_html": self.skipped_non_html,
             "skipped_traps": self.skipped_traps,
+            "offsite_unique": len(self.offsite_urls),
+            "complete": self.complete,
         }
+
+    @property
+    def complete(self) -> bool:
+        """True when the crawl exhausted the frontier rather than hitting a cap.
+
+        Several findings are only meaningful on a complete crawl. Orphan
+        detection above all: sitemap URLs are seeded early, so a truncated
+        crawl spends its budget on them before it has followed enough links to
+        discover them the other way — and then reports almost all of them as
+        orphans. That number is confidently wrong, which is worse than absent.
+        """
+        return len(self._heap) == 0 and self.dispatched < self.max_pages
 
     def orphans(self, crawled: set[str]) -> list[str]:
         """URLs known only from the sitemap — nothing on the site links to them.
 
         The frontier is the only place that knows this, because it is the only
-        thing that records *how* each URL was discovered.
+        thing that records *how* each URL was discovered. Returns [] on an
+        incomplete crawl; callers must check `complete` and say so.
         """
+        if not self.complete:
+            return []
         out = []
         for url, sources in self._sources.items():
             if url in crawled and sources == {"sitemap"}:

@@ -58,21 +58,54 @@ def test_page_cap_stops_dispatch():
 
 
 class TestOrphansAndTraps:
+    @staticmethod
+    def _drain(f):
+        """Simulate a crawl that ran to completion: empty the queue."""
+        while f.pop() is not None:
+            pass
+
     def test_sitemap_only_url_is_an_orphan(self):
         f = make()
         f.add("https://a.com/hidden", depth=1, source="sitemap")
+        self._drain(f)
+        assert f.complete
         assert f.orphans({"https://a.com/hidden"}) == ["https://a.com/hidden"]
 
     def test_linked_url_is_not_an_orphan(self):
         f = make()
         f.add("https://a.com/p", depth=1, source="sitemap")
         f.add("https://a.com/p", depth=1, source="internal_link")
+        self._drain(f)
         assert f.orphans({"https://a.com/p"}) == []
 
     def test_uncrawled_url_is_not_reported_as_orphan(self):
         f = make()
         f.add("https://a.com/hidden", depth=1, source="sitemap")
+        self._drain(f)
         assert f.orphans(set()) == []
+
+    def test_no_orphans_reported_when_queue_not_exhausted(self):
+        # The Azaya bug: a truncated crawl reported 74 orphans, almost none real.
+        f = make()
+        for i in range(5):
+            f.add(f"https://a.com/{i}", depth=1, source="sitemap")
+        assert not f.complete
+        assert f.orphans({"https://a.com/0"}) == []
+
+    def test_no_orphans_reported_when_page_cap_hit(self):
+        f = Frontier(ROOT, max_depth=3, max_pages=2)
+        for i in range(5):
+            f.add(f"https://a.com/{i}", depth=1, source="sitemap")
+        self._drain(f)
+        assert not f.complete
+        assert f.orphans({"https://a.com/0"}) == []
+
+    def test_complete_is_true_only_when_queue_empty_under_cap(self):
+        f = make()
+        f.add("https://a.com/p", depth=1, source="sitemap")
+        assert not f.complete
+        self._drain(f)
+        assert f.complete
 
     def test_trap_urls_are_rejected(self):
         f = make()
@@ -83,3 +116,11 @@ class TestOrphansAndTraps:
         f = make()
         f.add("https://a.com/checkout/", depth=1, source="internal_link")
         assert f.trap_reasons
+
+    def test_offsite_counts_instances_and_unique_urls(self):
+        # 437 offsite on Azaya looked alarming; it is a footer link x100 pages.
+        f = make()
+        for _ in range(3):
+            f.add("https://instagram.com/azaya", depth=1, source="internal_link")
+        assert f.stats()["skipped_offsite"] == 3
+        assert f.stats()["offsite_unique"] == 1

@@ -39,10 +39,12 @@ class Renderer:
     """Async context manager owning one Chromium instance and a page pool."""
 
     def __init__(self, user_agent: str, *, concurrency: int = 3,
-                 timeout_s: float = 15.0, block_assets: bool = True) -> None:
+                 timeout_s: float = 15.0, block_assets: bool = True,
+                 settle_ms: int = 1500) -> None:
         self.user_agent = user_agent
         self.concurrency = concurrency
         self.timeout_ms = int(timeout_s * 1000)
+        self.settle_ms = settle_ms
         self.block_assets = block_assets
         self._pw = None
         self._browser: Browser | None = None
@@ -83,29 +85,48 @@ class Renderer:
             await route.continue_()
 
     async def render(self, url: str) -> RenderResult:
-        """Load url, wait for the network to settle, return the DOM.
+        """Load url, let scripts run, return the DOM.
 
-        A timeout is not a failure. A slow page still has a DOM worth reading,
-        so we capture whatever rendered and flag it — one stuck page must never
-        cost us the page itself.
+        Two-stage wait, deliberately. Waiting for full network-idle sounds
+        right and is wrong on real sites: platforms like Wix hold a connection
+        open for analytics or chat, so idle never arrives and every page burns
+        the full timeout. Measured on azayaorganic.com, that was a third of
+        pages timing out on a site with nothing wrong with it.
+
+        So: wait for domcontentloaded (cheap, always fires), then give the page
+        a short settle budget for network-idle and shrug if it does not come.
+        The DOM is captured either way, and `timed_out` now means the page was
+        genuinely still working rather than merely holding a socket open.
         """
         assert self._pool is not None, "Renderer used outside its context manager"
         page = await self._pool.get()
         try:
-            timed_out = False
             try:
-                await page.goto(url, wait_until="networkidle", timeout=self.timeout_ms)
+                await page.goto(url, wait_until="domcontentloaded",
+                                timeout=self.timeout_ms)
             except PlaywrightError as exc:
                 if "Timeout" not in str(exc):
                     return RenderResult(html="", error=f"{type(exc).__name__}: {exc}")
-                timed_out = True
+                # Even a navigation timeout usually leaves a partial DOM.
+                return await self._capture(page, timed_out=True)
 
+            timed_out = False
             try:
-                html = await page.content()
-            except PlaywrightError as exc:
-                return RenderResult(html="", timed_out=timed_out,
-                                    error=f"content: {exc}")
+                await page.wait_for_load_state("networkidle", timeout=self.settle_ms)
+            except PlaywrightError:
+                # Not idle within the settle budget. Normal on any site with a
+                # chat widget or analytics beacon; not worth reporting.
+                timed_out = True
+                await page.wait_for_timeout(min(self.settle_ms, 800))
 
-            return RenderResult(html=html, timed_out=timed_out)
+            return await self._capture(page, timed_out=timed_out)
         finally:
             self._pool.put_nowait(page)
+
+    @staticmethod
+    async def _capture(page: Page, *, timed_out: bool) -> RenderResult:
+        try:
+            html = await page.content()
+        except PlaywrightError as exc:
+            return RenderResult(html="", timed_out=timed_out, error=f"content: {exc}")
+        return RenderResult(html=html, timed_out=timed_out)

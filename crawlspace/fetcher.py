@@ -45,7 +45,12 @@ class Fetcher:
             await self.limiter.acquire()
             try:
                 response = await client.get(url, follow_redirects=True)
-            except httpx.HTTPError as exc:
+            except Exception as exc:
+                # Deliberately broad. httpx wraps most transport failures, but
+                # protocol-level libraries underneath it (h2, ssl, anyio) can
+                # and do raise their own exception types straight through.
+                # One malformed response from one page must cost that page and
+                # nothing more — never the whole crawl.
                 record.fetch_error = f"{type(exc).__name__}: {exc}"
                 if attempt == 2:
                     return record, [], b""
@@ -80,7 +85,13 @@ class Fetcher:
         if not record.is_html:
             return record, [], b""
 
-        body = response.content
+        try:
+            body = response.content
+        except Exception as exc:
+            # The body can fail to read even after headers arrived cleanly.
+            record.fetch_error = f"body: {type(exc).__name__}: {exc}"
+            return record, [], b""
+
         record.raw_html_len = len(body)
         return record, links_for_frontier(body, record.final_url or url), body
 
@@ -94,8 +105,11 @@ def _http2_available() -> bool:
 
 
 def build_client(config: CrawlConfig) -> httpx.AsyncClient:
-    # HTTP/2 is a nice-to-have. Some client sites need it, none require it, and
-    # a missing optional dependency should not stop a crawl.
+    # HTTP/2 is OFF by default, deliberately. It buys nothing for crawling —
+    # we are not multiplexing hundreds of requests — and a real crawl of
+    # azayaorganic.com died 450 pages in when the h2 library raised
+    # InvalidBodyLengthError on a malformed frame from the server. HTTP/1.1
+    # tolerates what HTTP/2 refuses. Opt in with --http2 if a site needs it.
     return httpx.AsyncClient(
         headers={
             "User-Agent": config.user_agent,
@@ -105,6 +119,6 @@ def build_client(config: CrawlConfig) -> httpx.AsyncClient:
         timeout=httpx.Timeout(config.timeout_s, connect=10.0),
         follow_redirects=True,
         max_redirects=10,
-        http2=_http2_available(),
+        http2=config.http2 and _http2_available(),
         limits=httpx.Limits(max_connections=config.concurrency + 2),
     )

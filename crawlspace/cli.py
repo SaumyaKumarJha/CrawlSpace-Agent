@@ -35,6 +35,13 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--no-render", action="store_true",
                    help="skip Playwright; faster, but misses JS-built navigation")
     c.add_argument("--render-timeout", type=float, default=15.0)
+    c.add_argument("--settle", type=int, default=1500,
+                   help="ms to wait for network-idle after DOM ready")
+    c.add_argument("--no-images", action="store_true",
+                   help="skip image size lookups")
+    c.add_argument("--http2", action="store_true",
+                   help="enable HTTP/2 (off by default — some servers send "
+                        "frames the h2 library refuses, killing the crawl)")
     c.add_argument("--out", default="audits")
 
     args = ap.parse_args(argv)
@@ -58,6 +65,9 @@ def main(argv: list[str] | None = None) -> int:
         concurrency=args.concurrency,
         obey_robots=not args.ignore_robots,
         render_timeout_s=args.render_timeout,
+        render_settle_ms=args.settle,
+        size_images=not args.no_images,
+        http2=args.http2,
     )
 
     mode = "fetch only" if args.no_render else "fetch + render"
@@ -71,6 +81,11 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write("\n")
         print(f"CRAWL ABORTED — {exc}", file=sys.stderr)
         return 3
+    except KeyboardInterrupt:
+        sys.stderr.write("\n")
+        print("Interrupted. Pages fetched so far are saved in "
+              f"{out_dir / 'pages.jsonl'}", file=sys.stderr)
+        return 130
 
     sys.stderr.write("\n")
     statuses = Counter(r.status for r in records)
@@ -103,7 +118,14 @@ def main(argv: list[str] | None = None) -> int:
 
     orphans = crawler.orphans()
     tpl = crawler.templates()
-    print(f"\n  orphan pages      {len(orphans)}  (in sitemap, no internal links)")
+    if crawler.crawl_complete:
+        print(f"\n  orphan pages      {len(orphans)}  (in sitemap, no internal links)")
+    else:
+        remaining = crawler.frontier.stats()["queued"]
+        print(f"\n  orphan pages      not measured — crawl hit the page cap "
+              f"with {remaining} URLs still queued.")
+        print(f"                    re-run with --pages {len(crawler.records) + remaining + 50} "
+              f"for a complete crawl.")
     print(f"  templates         {tpl['distinct']} distinct across "
           f"{tpl['pages_with_signature']} pages")
     if crawler.frontier.trap_reasons:
@@ -111,10 +133,20 @@ def main(argv: list[str] | None = None) -> int:
                      key=lambda kv: -kv[1])[:3]
         print("  traps skipped     " + "; ".join(f"{n}x {r}" for r, n in top))
 
+    img = crawler.image_stats()
+    if img["sized"]:
+        print(f"  images            {img['sized']}/{img['unique_images']} sized, "
+              f"{img['over_200kb']} over 200KB, "
+              f"largest {img['largest_bytes'] // 1024}KB")
+
     if not args.no_render:
         rs = crawler.stats()
         print(f"\n  rendered          {rs['rendered']}")
-        print(f"  render timeouts   {rs['render_timeouts']}")
+        if rs["never_idle_pct"] >= 90:
+            print(f"  network never idle on {rs['never_idle_pct']}% of pages — "
+                  f"normal for this platform, DOM captured regardless")
+        elif rs["render_timeouts"]:
+            print(f"  slow to settle    {rs['render_timeouts']}")
         print(f"  render failures   {rs['render_failures']}")
         print(f"  JS-dependent      {rs['js_dependent']}  "
               f"(rendered DOM >3x raw HTML — preview of check ONP-10)")

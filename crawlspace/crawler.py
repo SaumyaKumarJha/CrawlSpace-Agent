@@ -25,6 +25,10 @@ from .urlnorm import normalise
 BLOCK_ABORT_RATIO = 0.20
 BLOCK_ABORT_MIN_SAMPLE = 15
 
+# Images are sized after the crawl, in one batch. Capped because a large site
+# can reference thousands and check PRF-04 only needs the big ones found.
+MAX_IMAGE_HEADS = 400
+
 
 class CrawlBlocked(RuntimeError):
     """Raised when the host is refusing the crawler."""
@@ -49,6 +53,11 @@ class Crawler:
         self.records: list[PageRecord] = []
         self.host: object | None = None
         self.sitemap = None
+        self.interrupted = False
+        # Records stream to disk as they are fetched. A crawl that dies at
+        # page 450 — a protocol error, a Ctrl-C, a closed laptop — must keep
+        # the 450 pages it politely fetched, not discard them.
+        self._pages_fh = (self.out_dir / "pages.jsonl").open("w", encoding="utf-8")
         self._blocked_responses = 0
         self._total_responses = 0
         self._render_failures = 0
@@ -74,6 +83,7 @@ class Crawler:
                         self.config.user_agent,
                         concurrency=self.config.concurrency,
                         timeout_s=self.config.render_timeout_s,
+                        settle_ms=self.config.render_settle_ms,
                     )
                 )
 
@@ -97,9 +107,17 @@ class Crawler:
             ]
             try:
                 await asyncio.gather(*workers)
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                self.interrupted = True
             finally:
                 for w in workers:
                     w.cancel()
+
+            if self.config.size_images and not self.interrupted:
+                try:
+                    await self._size_images(client)
+                except Exception:
+                    pass          # sizing is a bonus, never a reason to fail
 
         self._write_outputs()
         return self.records
@@ -111,47 +129,66 @@ class Crawler:
             if item is None:
                 return
 
-            record, links, body = await self.fetcher.fetch(
-                client, item.url, depth=item.depth,
-                sources=self.frontier.sources_for(item.url),
-            )
-
-            if body:
-                self.store.put("raw", record.url, body)
-
-            # Render only real HTML pages we actually got. No point loading a
-            # 404 or a redirect target in a browser.
-            rendered_html = ""
-            if self.renderer and record.ok and record.is_html:
-                rendered_html, links = await self._render(record, links)
-
-            # Parse the DOM a visitor actually sees. Rendered when we have it,
-            # raw otherwise — parsing raw HTML on a JS site would report an
-            # empty page that is not empty.
-            if record.is_html:
-                page_html = rendered_html or body.decode("utf-8", "replace")
-                parse_into(record, page_html, self.root)
-                record.template_signature = template_signature(page_html)
-
-            async with self._lock:
-                self.records.append(record)
-                if record.status is not None:
-                    self._total_responses += 1
-                    if record.status in (403, 429):
-                        self._blocked_responses += 1
-                self._check_abort()
-
-                base = record.final_url or record.url
-                for href in links:
-                    self.frontier.add(href, depth=item.depth + 1,
-                                      source="internal_link", base=base)
-                record.discovered_via = self.frontier.sources_for(record.url)
-
-                if len(self.records) % 10 == 0:
-                    self._checkpoint()
+            try:
+                await self._process(item, client)
+            except CrawlBlocked:
+                raise
+            except Exception as exc:
+                # A page that blows up in parsing, rendering or storage is one
+                # lost page, recorded as such — not a dead crawl.
+                async with self._lock:
+                    failed = PageRecord(url=item.url, depth=item.depth)
+                    failed.fetch_error = f"{type(exc).__name__}: {exc}"
+                    self._append(failed)
 
             if on_progress:
                 on_progress(len(self.records), self.frontier.stats())
+
+    async def _process(self, item, client: httpx.AsyncClient) -> None:
+        record, links, body = await self.fetcher.fetch(
+            client, item.url, depth=item.depth,
+            sources=self.frontier.sources_for(item.url),
+        )
+
+        if body:
+            self.store.put("raw", record.url, body)
+
+        # Render only real HTML pages we actually got. No point loading a
+        # 404 or a redirect target in a browser.
+        rendered_html = ""
+        if self.renderer and record.ok and record.is_html:
+            rendered_html, links = await self._render(record, links)
+
+        # Parse the DOM a visitor actually sees. Rendered when we have it,
+        # raw otherwise — parsing raw HTML on a JS site would report an
+        # empty page that is not empty.
+        if record.is_html:
+            page_html = rendered_html or body.decode("utf-8", "replace")
+            parse_into(record, page_html, self.root)
+            record.template_signature = template_signature(page_html)
+
+        async with self._lock:
+            self._append(record)
+            if record.status is not None:
+                self._total_responses += 1
+                if record.status in (403, 429):
+                    self._blocked_responses += 1
+            self._check_abort()
+
+            base = record.final_url or record.url
+            for href in links:
+                self.frontier.add(href, depth=item.depth + 1,
+                                  source="internal_link", base=base)
+            record.discovered_via = self.frontier.sources_for(record.url)
+
+            if len(self.records) % 10 == 0:
+                self._checkpoint()
+
+    def _append(self, record: PageRecord) -> None:
+        """Keep the record in memory and on disk in the same breath."""
+        self.records.append(record)
+        self._pages_fh.write(json.dumps(asdict(record), default=str) + "\n")
+        self._pages_fh.flush()
 
     async def _render(self, record: PageRecord,
                       raw_links: list[str]) -> tuple[str, list[str]]:
@@ -190,9 +227,52 @@ class Crawler:
                 f"allowlist the CrawlspaceBot user-agent before re-running."
             )
 
+    async def _size_images(self, client: httpx.AsyncClient) -> None:
+        """Fill ImageRef.bytes with a HEAD request per unique image.
+
+        Done once at the end rather than during parsing: the same hero image
+        appears on every page, and sizing it 300 times would be both slow and
+        rude. One request per distinct URL, results shared back to every record
+        that references it.
+        """
+        unique: dict[str, list] = {}
+        for record in self.records:
+            for image in record.images:
+                unique.setdefault(image.src, []).append(image)
+
+        for src in list(unique)[:MAX_IMAGE_HEADS]:
+            await self.limiter.acquire()
+            size = None
+            try:
+                response = await client.head(src, timeout=10.0)
+                if response.status_code == 405:      # some CDNs refuse HEAD
+                    response = await client.get(src, timeout=15.0)
+                if response.status_code == 200:
+                    length = response.headers.get("content-length")
+                    size = int(length) if length and length.isdigit() else None
+            except (httpx.HTTPError, ValueError):
+                size = None
+            if size is not None:
+                for image in unique[src]:
+                    image.bytes = size
+
+    def image_stats(self) -> dict:
+        sized = [i for r in self.records for i in r.images if i.bytes]
+        oversized = [i for i in sized if i.bytes > 200_000]
+        return {
+            "unique_images": len({i.src for r in self.records for i in r.images}),
+            "sized": len(sized),
+            "over_200kb": len(oversized),
+            "largest_bytes": max((i.bytes for i in sized), default=0),
+        }
+
     def orphans(self) -> list[str]:
         crawled = {r.url for r in self.records if r.ok}
         return self.frontier.orphans(crawled)
+
+    @property
+    def crawl_complete(self) -> bool:
+        return self.frontier.complete
 
     def templates(self) -> dict:
         sigs = [r.template_signature for r in self.records if r.template_signature]
@@ -208,10 +288,17 @@ class Crawler:
             r for r in rendered
             if r.raw_html_len and r.rendered_html_len > r.raw_html_len * 3
         ]
+        timeouts = sum(1 for r in self.records if r.render_timed_out)
+        # A metric that is always true is worse than no metric. On Wix or any
+        # platform holding a socket open for analytics, network-idle never
+        # arrives and every page gets flagged — 410 of 410 on azayaorganic.com.
+        # Report the rate so it reads as a property of the platform rather than
+        # a per-page fault.
         return {
             "rendered": len(rendered),
             "render_failures": self._render_failures,
-            "render_timeouts": sum(1 for r in self.records if r.render_timed_out),
+            "render_timeouts": timeouts,
+            "never_idle_pct": round(100 * timeouts / len(rendered)) if rendered else 0,
             "js_dependent": len(gaps),
         }
 
@@ -225,15 +312,20 @@ class Crawler:
         (self.out_dir / "state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
 
     def _write_outputs(self) -> None:
-        with (self.out_dir / "pages.jsonl").open("w", encoding="utf-8") as fh:
-            for rec in self.records:
-                fh.write(json.dumps(asdict(rec), default=str) + "\n")
+        try:
+            self._pages_fh.close()
+        except Exception:
+            pass
 
         site = {
             "root": self.root,
+            "interrupted": self.interrupted,
             "host": asdict(self.host) if self.host else None,
             "sitemap": asdict(self.sitemap) if self.sitemap else None,
+            "crawl_complete": self.crawl_complete,
             "orphans": self.orphans(),
+            "orphans_valid": self.crawl_complete,
+            "images": self.image_stats(),
             "templates": self.templates(),
             "frontier": self.frontier.stats(),
             "trap_reasons": self.frontier.trap_reasons,
