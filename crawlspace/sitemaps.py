@@ -120,7 +120,11 @@ async def collect_sitemaps(client: httpx.AsyncClient, root: str,
 
         try:
             response = await client.get(url, timeout=20.0)
-        except httpx.HTTPError as exc:
+        except Exception as exc:
+            # Broad deliberately — see fetcher.py. Sitemap discovery runs
+            # before the crawl's own per-page recovery exists, so a
+            # protocol-level exception (h2, ssl, anyio) that doesn't subclass
+            # httpx.HTTPError must still cost only this one sitemap URL.
             report.errors.append({"url": url, "error": f"{type(exc).__name__}: {exc}"})
             continue
 
@@ -154,5 +158,7 @@ async def _exists(client: httpx.AsyncClient, url: str) -> bool:
         if response.status_code == 405:      # some hosts refuse HEAD
             response = await client.get(url, timeout=10.0)
         return response.status_code == 200
-    except httpx.HTTPError:
+    except Exception:
+        # Broad deliberately, same reasoning as above — a common-path sitemap
+        # probe failing oddly should mean "not found", never a crashed crawl.
         return False

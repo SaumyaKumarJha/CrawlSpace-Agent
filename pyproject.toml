@@ -7,7 +7,6 @@ dependencies = [
     "httpx[http2]>=0.27",
     "protego>=0.3",
     "selectolax>=0.3.21",
-    "tenacity>=8.2",
     "playwright>=1.44",
 ]
 
@@ -21,7 +20,7 @@ build-backend = "setuptools.build_meta"
 # Explicit, because flat-layout auto-discovery trips over the sibling
 # tests/ templates/ audits/ directories and refuses to install.
 [tool.setuptools]
-packages = ["crawlspace", "crawlspace.checks", "crawlspace.enrich"]
+packages = ["crawlspace", "crawlspace.checks"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

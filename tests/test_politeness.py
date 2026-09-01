@@ -27,6 +27,32 @@ async def test_robots_blocks_and_allows():
         assert gate.sitemaps("https://a.com/") == ["https://a.com/sitemap.xml"]
 
 
+async def test_a_non_httpx_exception_fetching_robots_fails_open_not_crashes():
+    """robots.txt is fetched before any page and before the crawl's per-page
+    recovery exists. Before the fix, only httpx.HTTPError was caught here —
+    a raw h2/ssl/anyio exception would crash the whole run before it started.
+    """
+    class ProtocolLevelError(Exception):
+        pass
+
+    def handler(request):
+        raise ProtocolLevelError("malformed frame")
+
+    async with _client(handler) as c:
+        gate = RobotsGate(UA)
+        await gate.load(c, "https://a.com/")          # must not raise
+        assert gate.allowed("https://a.com/anything")  # fails open
+
+
+async def test_malformed_robots_txt_content_fails_open_not_crashes():
+    """Protego is generally lenient, but a site can serve genuine garbage as
+    robots.txt — this must never be the thing that takes down the crawl."""
+    async with _client(lambda r: httpx.Response(200, content=b"\xff\xfe\x00garbage")) as c:
+        gate = RobotsGate(UA)
+        await gate.load(c, "https://a.com/")
+        assert gate.allowed("https://a.com/anything")
+
+
 async def test_missing_robots_fails_open():
     async with _client(lambda r: httpx.Response(404)) as c:
         gate = RobotsGate(UA)

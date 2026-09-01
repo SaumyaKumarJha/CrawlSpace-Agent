@@ -82,7 +82,12 @@ async def resolve_host(client: httpx.AsyncClient, domain: str) -> HostResolution
         try:
             response = await client.get(variant, timeout=15.0,
                                         follow_redirects=True)
-        except httpx.HTTPError as exc:
+        except Exception as exc:
+            # Deliberately broad, same reasoning as fetcher.py: this runs
+            # before any page has been fetched, outside the per-page recovery
+            # in crawler.py's worker loop, so an h2/ssl/anyio exception here —
+            # not just an httpx.HTTPError — would crash the whole run before
+            # it starts rather than costing one host variant.
             results[variant] = {"error": f"{type(exc).__name__}: {exc}"}
             continue
 

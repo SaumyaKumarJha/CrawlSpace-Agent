@@ -1,5 +1,8 @@
-from crawlspace.sitemaps import parse_sitemap_xml
 import gzip
+
+import httpx
+
+from crawlspace.sitemaps import _exists, collect_sitemaps, parse_sitemap_xml
 
 URLSET = b"""<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -41,3 +44,30 @@ def test_html_served_instead_of_xml():
 
 def test_empty_input():
     assert parse_sitemap_xml(b"") == ([], [])
+
+
+class _ProtocolLevelError(Exception):
+    """Stands in for an h2/ssl/anyio exception, not an httpx.HTTPError."""
+
+
+async def test_collect_sitemaps_survives_a_non_httpx_exception():
+    """Before the fix, only httpx.HTTPError was caught per sitemap URL — a
+    raw h2/ssl/anyio exception would propagate out of collect_sitemaps and
+    crash the run before a single page was fetched."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise _ProtocolLevelError("malformed frame")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        report = await collect_sitemaps(client, "https://a.com/",
+                                        ["https://a.com/sitemap.xml"])
+
+    assert report.urls == []
+    assert any("_ProtocolLevelError" in e["error"] for e in report.errors)
+
+
+async def test_exists_survives_a_non_httpx_exception():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise _ProtocolLevelError("malformed frame")
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        assert await _exists(client, "https://a.com/sitemap.xml") is False

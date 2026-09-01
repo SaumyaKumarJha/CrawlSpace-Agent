@@ -66,7 +66,12 @@ class RobotsGate:
         robots_url = origin + "/robots.txt"
         try:
             r = await client.get(robots_url, timeout=10.0)
-        except httpx.HTTPError:
+        except Exception:
+            # Broad deliberately, same reasoning as fetcher.py: robots.txt is
+            # fetched before any page and before the crawl's per-page
+            # recovery exists, so a non-httpx exception here (h2, ssl, anyio)
+            # must fail open like any other unreachable robots.txt, not crash
+            # the run before it starts.
             self._parsers[origin] = None
             self._sitemaps[origin] = []
             return
@@ -81,9 +86,15 @@ class RobotsGate:
             self._sitemaps[origin] = []
             return
 
-        parser = Protego.parse(r.text)
-        self._parsers[origin] = parser
-        self._sitemaps[origin] = list(parser.sitemaps)
+        try:
+            parser = Protego.parse(r.text)
+            self._parsers[origin] = parser
+            self._sitemaps[origin] = list(parser.sitemaps)
+        except Exception:
+            # A malformed robots.txt some site actually serves in production
+            # should fail open, not crash the run before any page is fetched.
+            self._parsers[origin] = None
+            self._sitemaps[origin] = []
 
     def allowed(self, url: str) -> bool:
         if not self.obey:
