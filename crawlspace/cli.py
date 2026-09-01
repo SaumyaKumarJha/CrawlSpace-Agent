@@ -43,6 +43,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="enable HTTP/2 (off by default — some servers send "
                         "frames the h2 library refuses, killing the crawl)")
     c.add_argument("--out", default="audits")
+    c.add_argument("--resume", action="store_true",
+                   help="pick up an interrupted crawl instead of restarting — "
+                        "same domain, same --out, same day; already-fetched "
+                        "pages are kept and not re-fetched")
 
     args = ap.parse_args(argv)
 
@@ -73,7 +77,10 @@ def main(argv: list[str] | None = None) -> int:
     mode = "fetch only" if args.no_render else "fetch + render"
     print(f"Crawling {root}  (cap {args.pages} pages, depth {args.depth}, "
           f"{args.rps} req/s, {mode})")
-    crawler = Crawler(config, out_dir, render=not args.no_render)
+    crawler = Crawler(config, out_dir, render=not args.no_render, resume=args.resume)
+    if crawler.resumed:
+        print(f"  resuming — {len(crawler.records)} pages already fetched, "
+              f"kept from {out_dir / 'pages.jsonl'}")
 
     try:
         records = asyncio.run(crawler.run(on_progress=_progress))

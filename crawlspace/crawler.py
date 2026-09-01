@@ -16,7 +16,7 @@ from .sitemaps import collect_sitemaps
 from .template import representative_urls, signature as template_signature
 from .frontier import Frontier
 from .htmlstore import HtmlStore
-from .models import CrawlConfig, PageRecord
+from .models import CrawlConfig, ImageRef, LinkRef, PageRecord
 from .politeness import RateLimiter, RobotsGate
 from .urlnorm import normalise
 
@@ -44,8 +44,43 @@ class CrawlBlocked(RuntimeError):
     """Raised when the host is refusing the crawler."""
 
 
+def _record_from_json(data: dict) -> PageRecord:
+    """Reconstruct a PageRecord from one line of a prior run's pages.jsonl.
+
+    json.loads gives back plain dicts and lists — the nested LinkRef/ImageRef
+    dataclasses and the (tag, level) heading tuples need rebuilding, or every
+    piece of code downstream that expects `.href` / `.bytes` attribute access
+    on a resumed record breaks with an AttributeError on a plain dict instead.
+    """
+    data = dict(data)
+    data["internal_links"] = [LinkRef(**link) for link in data.get("internal_links") or []]
+    data["external_links"] = [LinkRef(**link) for link in data.get("external_links") or []]
+    data["images"] = [ImageRef(**image) for image in data.get("images") or []]
+    data["heading_outline"] = [tuple(h) for h in data.get("heading_outline") or []]
+    known = {f.name for f in PageRecord.__dataclass_fields__.values()}
+    return PageRecord(**{k: v for k, v in data.items() if k in known})
+
+
+def _load_resumed_records(pages_path: Path) -> list[PageRecord]:
+    records: list[PageRecord] = []
+    with pages_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(_record_from_json(json.loads(line)))
+            except (json.JSONDecodeError, TypeError):
+                # A half-written last line from the crash itself — the one
+                # record actually lost, and the reason resume adds it back to
+                # the frontier rather than trusting pages.jsonl to be gapless.
+                continue
+    return records
+
+
 class Crawler:
-    def __init__(self, config: CrawlConfig, out_dir: Path, *, render: bool = True) -> None:
+    def __init__(self, config: CrawlConfig, out_dir: Path, *, render: bool = True,
+                 resume: bool = False) -> None:
         self.config = config
         self.out_dir = out_dir
         self.out_dir.mkdir(parents=True, exist_ok=True)
@@ -60,14 +95,21 @@ class Crawler:
         self.store = HtmlStore(out_dir / "html")
         self.renderer = None
 
-        self.records: list[PageRecord] = []
         self.host: object | None = None
         self.sitemap = None
         self.interrupted = False
+
         # Records stream to disk as they are fetched. A crawl that dies at
         # page 450 — a protocol error, a Ctrl-C, a closed laptop — must keep
-        # the 450 pages it politely fetched, not discard them.
-        self._pages_fh = (self.out_dir / "pages.jsonl").open("w", encoding="utf-8")
+        # the 450 pages it politely fetched, not discard them. Resuming reads
+        # that survivor file back in and appends to it rather than truncating.
+        pages_path = self.out_dir / "pages.jsonl"
+        self.resumed = bool(resume and pages_path.exists())
+        self.records: list[PageRecord] = (
+            _load_resumed_records(pages_path) if self.resumed else []
+        )
+        self._pages_fh = pages_path.open("a" if self.resumed else "w", encoding="utf-8")
+
         self._blocked_responses = 0
         self._total_responses = 0
         self._render_failures = 0
@@ -83,6 +125,9 @@ class Crawler:
             if self.host.canonical != self.root:
                 self.root = self.host.canonical
                 self.frontier.root = self.root
+
+            if self.resumed:
+                self._replay_resumed_into_frontier()
 
             self.frontier.add(self.root, depth=0, source="seed")
 
@@ -131,6 +176,41 @@ class Crawler:
 
         self._write_outputs()
         return self.records
+
+    def _replay_resumed_into_frontier(self) -> None:
+        """Rebuild frontier state from a prior run's records before re-seeding.
+
+        Must run before the root and sitemap URLs are (re-)added: marking an
+        already-crawled URL seen first is what turns that later `add()` call
+        into a no-op instead of a re-fetch of a page we already have. Each
+        resumed page's own internal links are replayed through `add()` too, at
+        the depth they would have been discovered at originally, so anything
+        that page linked to but the crawl hadn't reached yet is still queued —
+        a resumed crawl explores the same frontier a continuous one would
+        have, not just the URLs already on disk.
+
+        Two passes, deliberately. Page A can link to page B, and both can be
+        among the resumed records — if B's links were replayed (pass one)
+        before B's own URL was marked seen (pass two), `add()` would queue B
+        as if it were new, and it would be fetched a second time. Marking
+        every resumed URL seen first, in its own pass, before any link from
+        any of them is replayed, is what makes this order-independent.
+        """
+        for record in self.records:
+            sources = set(record.discovered_via) or {"seed"}
+            self.frontier.mark_crawled(record.url, sources=sources)
+            if record.final_url and record.final_url != record.url:
+                self.frontier.mark_crawled(record.final_url, sources=sources)
+
+        for record in self.records:
+            base = record.final_url or record.url
+            for link in record.internal_links:
+                self.frontier.add(link.href, depth=record.depth + 1,
+                                  source="internal_link", base=base)
+
+        # The page budget already spent, so a resumed crawl fetches only the
+        # remainder of `max_pages` rather than that many pages all over again.
+        self.frontier.dispatched = len(self.records)
 
     async def _worker(self, client: httpx.AsyncClient, on_progress) -> None:
         while True:

@@ -89,6 +89,20 @@ class Frontier:
     def sources_for(self, url: str) -> list[str]:
         return sorted(self._sources.get(url, set()))
 
+    def mark_crawled(self, url: str, *, sources: set[str]) -> None:
+        """Register a URL as already handled by a resumed prior run.
+
+        Used only at resume time, to replay pages.jsonl from an interrupted
+        crawl back into the frontier before the queue is (re)seeded: marks the
+        URL seen — so seeding the root or a sitemap URL that was already
+        fetched becomes a no-op rather than a re-fetch — without touching
+        `dispatched`, which the caller sets once, to the resumed page count,
+        after every record has been replayed this way.
+        """
+        norm = normalise(url) or url
+        self._seen.add(norm)
+        self._sources.setdefault(norm, set()).update(sources)
+
     def stats(self) -> dict[str, int]:
         return {
             "queued": len(self._heap),
