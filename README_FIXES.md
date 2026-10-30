@@ -1,11 +1,11 @@
 # Crawlspace — fixes from the first real client run
 
-Running against azayaorganic.com found four things. Three were bugs; one was
+Running against the first real client site found four things. Three were bugs; one was
 me misreading a number.
 
 ## 1. Orphan count was wrong on a truncated crawl — FIXED
 
-**The symptom.** 74 orphans reported on Azaya. Almost none were real.
+**The symptom.** 74 orphans reported on the client site. Almost none were real.
 
 **The cause.** Sitemap URLs seed the frontier at depth 1. With a 100-page cap
 on a 554-page site, the crawler spent nearly its whole budget on sitemap
@@ -65,7 +65,7 @@ Not a bug, but the number was uninterpretable, so `stats()` now reports
 ## Still open
 
 - **SSRF protection** — needed before any public form, not before then.
-- **Template signature unvalidated at scale.** 5 templates across 100 Azaya
+- **Template signature unvalidated at scale.** 5 templates across 100 client
   pages looks right but has not been checked by eye against the actual pages.
 - **Word count on platform sites** leaks boilerplate where semantic tags are
   not used. Will need tuning when the thin-content check lands.
@@ -73,10 +73,10 @@ Not a bug, but the number was uninterpretable, so `stats()` now reports
   in `site.json` and the checks should refuse to run site-wide comparisons on
   a truncated crawl. Enforced at check level in week 2.
 
-## Re-run Azaya properly
+## Re-run the client crawl properly
 
 ```bash
-python -m crawlspace.cli crawl azayaorganic.com --pages 650 --rps 1
+python -m crawlspace.cli crawl example.com --pages 650 --rps 1
 ```
 
 Complete crawl, so the orphan number becomes real, and the template map covers

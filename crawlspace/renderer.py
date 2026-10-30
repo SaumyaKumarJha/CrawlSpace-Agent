@@ -90,7 +90,7 @@ class Renderer:
         Two-stage wait, deliberately. Waiting for full network-idle sounds
         right and is wrong on real sites: platforms like Wix hold a connection
         open for analytics or chat, so idle never arrives and every page burns
-        the full timeout. Measured on azayaorganic.com, that was a third of
+        the full timeout. Measured on a real client's Wix site, that was a third of
         pages timing out on a site with nothing wrong with it.
 
         So: wait for domcontentloaded (cheap, always fires), then give the page

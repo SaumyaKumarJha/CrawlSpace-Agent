@@ -1,7 +1,7 @@
 """Tests for Crawler orchestration bugs, not the full crawl loop.
 
 The full crawl loop needs a live server (see the fixture-site integration
-runs); these tests isolate the two bugs found on the real Azaya crawl that
+runs); these tests isolate the two bugs found on the first real client crawl that
 don't need a network at all: the image-sizing step running serially through
 the page crawl's rate limiter, and results not being shared across every
 record referencing the same image.

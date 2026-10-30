@@ -393,7 +393,7 @@ class Crawler:
         timeouts = sum(1 for r in self.records if r.render_timed_out)
         # A metric that is always true is worse than no metric. On Wix or any
         # platform holding a socket open for analytics, network-idle never
-        # arrives and every page gets flagged — 410 of 410 on azayaorganic.com.
+        # arrives and every page gets flagged — 410 of 410 on a real client crawl.
         # Report the rate so it reads as a property of the platform rather than
         # a per-page fault.
         return {

@@ -106,8 +106,8 @@ def _http2_available() -> bool:
 
 def build_client(config: CrawlConfig) -> httpx.AsyncClient:
     # HTTP/2 is OFF by default, deliberately. It buys nothing for crawling —
-    # we are not multiplexing hundreds of requests — and a real crawl of
-    # azayaorganic.com died 450 pages in when the h2 library raised
+    # we are not multiplexing hundreds of requests — and a real client
+    # crawl died 450 pages in when the h2 library raised
     # InvalidBodyLengthError on a malformed frame from the server. HTTP/1.1
     # tolerates what HTTP/2 refuses. Opt in with --http2 if a site needs it.
     return httpx.AsyncClient(

@@ -1,4 +1,4 @@
-# Crawlspace — surviving the azayaorganic.com crash
+# Crawlspace — surviving the first big client crawl crash
 
 A 569-page crawl died at page ~450 with:
 
@@ -72,7 +72,7 @@ Worth keeping, from `state.json` at the moment it died:
 
 | signal | value | reading |
 |---|---|---|
-| canonical host | `https://www.azayaorganic.com/` | apex redirects to www correctly |
+| canonical host | `https://www.example.com/` | apex redirects to www correctly |
 | offsite unique | **1021** | needs investigating — high for a 569-page site |
 | js_dependent | 0 | Wix server-renders; content is in the raw HTML |
 | skipped_traps | 0 | no faceted-filter explosion on this site |
@@ -84,7 +84,7 @@ would inherit that error.
 ## Re-run
 
 ```bash
-python -m crawlspace.cli crawl azayaorganic.com --pages 650 --rps 1
+python -m crawlspace.cli crawl example.com --pages 650 --rps 1
 ```
 
 If it dies again, `pages.jsonl` keeps whatever it reached.

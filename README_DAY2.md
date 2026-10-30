@@ -14,7 +14,7 @@ playwright install chromium        # downloads the browser, ~150MB, once
 
 ```bash
 python -m crawlspace.cli crawl newbi.live --pages 50
-python -m crawlspace.cli crawl azayaorganic.com --pages 100 --rps 1
+python -m crawlspace.cli crawl example.com --pages 100 --rps 1
 
 python -m crawlspace.cli crawl newbi.live --no-render   # day-1 behaviour
 ```

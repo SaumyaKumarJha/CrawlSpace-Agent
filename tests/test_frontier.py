@@ -85,7 +85,7 @@ class TestOrphansAndTraps:
         assert f.orphans(set()) == []
 
     def test_no_orphans_reported_when_queue_not_exhausted(self):
-        # The Azaya bug: a truncated crawl reported 74 orphans, almost none real.
+        # The first real-client bug: a truncated crawl reported 74 orphans, almost none real.
         f = make()
         for i in range(5):
             f.add(f"https://a.com/{i}", depth=1, source="sitemap")
@@ -118,9 +118,9 @@ class TestOrphansAndTraps:
         assert f.trap_reasons
 
     def test_offsite_counts_instances_and_unique_urls(self):
-        # 437 offsite on Azaya looked alarming; it is a footer link x100 pages.
+        # 437 offsite on a client site looked alarming; it is a footer link x100 pages.
         f = make()
         for _ in range(3):
-            f.add("https://instagram.com/azaya", depth=1, source="internal_link")
+            f.add("https://instagram.com/examplebrand", depth=1, source="internal_link")
         assert f.stats()["skipped_offsite"] == 3
         assert f.stats()["offsite_unique"] == 1

@@ -7,8 +7,8 @@ from crawlspace import parse
 from crawlspace.models import PageRecord
 
 FIXTURES = Path(__file__).parent / "fixtures" / "pages"
-URL = "https://azayaorganic.com/products/ghee"
-ROOT = "https://azayaorganic.com/"
+URL = "https://example.com/products/ghee"
+ROOT = "https://example.com/"
 
 
 def tree(name: str) -> HTMLParser:
@@ -28,7 +28,7 @@ def bare():
 class TestTitle:
     def test_extracts_and_collapses_whitespace(self, product):
         t = parse.extract_title(product)
-        assert t["text"] == "A2 Bilona Ghee | Azaya Organics"
+        assert t["text"] == "A2 Bilona Ghee | Green Organics"
 
     def test_reports_pixel_width_not_just_length(self, product):
         t = parse.extract_title(product)
@@ -164,7 +164,7 @@ class TestStructuredData:
         data = parse.extract_structured_data(tree("graph_jsonld.html"))
         local = next(d for d in data if d["_format"] == "microdata")
         assert local["@type"] == "LocalBusiness"
-        assert local["name"] == "Azaya Organics"
+        assert local["name"] == "Green Organics"
 
     def test_invalid_json_ld_is_recorded_not_dropped(self):
         data = parse.extract_structured_data(tree("broken_jsonld.html"))
@@ -180,7 +180,7 @@ class TestParseInto:
         record = PageRecord(url=URL, final_url=URL, status=200,
                             content_type="text/html")
         parse.parse_into(record, (FIXTURES / "product.html").read_text(), ROOT)
-        assert record.title["text"] == "A2 Bilona Ghee | Azaya Organics"
+        assert record.title["text"] == "A2 Bilona Ghee | Green Organics"
         assert record.h1 == ["A2 Bilona Ghee"]
         assert record.canonical == URL
         assert record.word_count > 0
@@ -194,7 +194,7 @@ class TestParseInto:
         assert record.word_count == 0
 
     def test_resolves_against_final_url_after_redirect(self):
-        record = PageRecord(url="https://azayaorganic.com/old-ghee",
+        record = PageRecord(url="https://example.com/old-ghee",
                             final_url=URL, status=200, content_type="text/html")
         parse.parse_into(record, (FIXTURES / "product.html").read_text(), ROOT)
         # Canonical is href="/products/ghee" — resolving against the *requested*
@@ -208,7 +208,7 @@ class TestLinksForFrontier:
         html = (FIXTURES / "product.html").read_text()
         hrefs = parse.links_for_frontier(html)
         assert "/products/oil" in hrefs
-        assert "mailto:hi@azayaorganic.com" in hrefs  # frontier normalises it away
+        assert "mailto:hi@example.com" in hrefs  # frontier normalises it away
 
     def test_accepts_bytes(self):
         assert parse.links_for_frontier(b'<a href="/x">x</a>') == ["/x"]
