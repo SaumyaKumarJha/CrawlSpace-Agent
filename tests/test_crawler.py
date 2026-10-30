@@ -108,6 +108,24 @@ class TestImageSizing:
         assert record.images[1].bytes == 500
 
 
+class TestImageStats:
+    def test_counts_each_image_once_not_once_per_page(self, tmp_path):
+        crawler = make_crawler(tmp_path)
+        for n in range(3):  # the same hero image on three pages
+            crawler.records.append(PageRecord(url=f"https://example.com/{n}", images=[
+                ImageRef(src="https://example.com/hero.jpg", bytes=500_000),
+                ImageRef(src=f"https://example.com/thumb{n}.jpg", bytes=10_000),
+            ]))
+        crawler._pages_fh.close()
+
+        stats = crawler.image_stats()
+
+        assert stats["unique_images"] == 4
+        assert stats["sized"] == 4
+        assert stats["over_200kb"] == 1
+        assert stats["sized"] <= stats["unique_images"]
+
+
 class TestResume:
     """Day 5: an interrupted crawl resumes instead of restarting.
 

@@ -359,13 +359,16 @@ class Crawler:
         await asyncio.gather(*(size_one(src) for src in list(unique)[:MAX_IMAGE_HEADS]))
 
     def image_stats(self) -> dict:
-        sized = [i for r in self.records for i in r.images if i.bytes]
-        oversized = [i for i in sized if i.bytes > 200_000]
+        # Every figure counts each image once. The same hero image on 300
+        # pages is one image to fix, not 300 — and mixing per-appearance counts
+        # with a unique total printed nonsense like "10100/2555 sized".
+        all_srcs = {i.src for r in self.records for i in r.images}
+        sizes = {i.src: i.bytes for r in self.records for i in r.images if i.bytes}
         return {
-            "unique_images": len({i.src for r in self.records for i in r.images}),
-            "sized": len(sized),
-            "over_200kb": len(oversized),
-            "largest_bytes": max((i.bytes for i in sized), default=0),
+            "unique_images": len(all_srcs),
+            "sized": len(sizes),
+            "over_200kb": sum(1 for b in sizes.values() if b > 200_000),
+            "largest_bytes": max(sizes.values(), default=0),
         }
 
     def orphans(self) -> list[str]:
