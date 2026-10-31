@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crawlspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#F7F2FF; --panel:#FFFFFF; --panel-2:#F1EAFF; --line:#E4DAF7; --line-hot:#1E1340;
+  --ink:#1E1340; --ink-2:#4B3F72; --ink-3:#8A7FAD;
+  --violet:#7B5CFF; --violet-soft:#E9E3FF; --pink:#FF4FA3; --pink-soft:#FFE0EF;
+  --yellow:#FFD43B; --yellow-soft:#FFF4C2; --sky:#3BB8FF; --sky-soft:#DDF3FF; --orange:#FF8A3D; --orange-soft:#FFE7D6;
+  --display:'Unbounded',system-ui,sans-serif; --body:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,Menlo,monospace;
+  --r:16px; --shadow:4px 4px 0 var(--ink); --shadow-sm:3px 3px 0 var(--ink);
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--ground);color:var(--ink);font:14.5px/1.55 var(--body);-webkit-font-smoothing:antialiased;min-height:100vh;
+  background-image:radial-gradient(rgba(123,92,255,.16) 1.2px,transparent 1.3px);background-size:22px 22px;background-attachment:fixed}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(520px 340px at 92% -4%,rgba(255,79,163,.20),transparent 70%),
+             radial-gradient(560px 380px at -6% 30%,rgba(59,184,255,.16),transparent 70%),
+             radial-gradient(520px 360px at 70% 105%,rgba(255,212,59,.22),transparent 70%)}
+a{color:var(--violet);text-decoration:none;font-weight:600}
+a:hover{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--pink);outline-offset:2px}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:24px;padding:0 28px;height:64px;
+  background:rgba(247,242,255,.86);backdrop-filter:blur(10px);border-bottom:2px solid var(--ink)}
+.brand{display:flex;align-items:center;gap:10px;font:800 17px/1 var(--display);letter-spacing:-.02em;color:var(--ink)}
+.brand:hover{text-decoration:none}
+.brand i{width:26px;height:26px;border-radius:8px;background:conic-gradient(from 200deg,var(--violet),var(--pink),var(--yellow),var(--sky),var(--violet));
+  border:2px solid var(--ink);box-shadow:2px 2px 0 var(--ink);transform:rotate(-8deg)}
+.brand small{font:700 10px var(--body);letter-spacing:.06em;color:var(--ink);background:var(--yellow);border:2px solid var(--ink);
+  border-radius:999px;padding:3px 8px;margin-left:2px;transform:rotate(3deg)}
+.nav{display:flex;gap:6px}
+.nav a{color:var(--ink-2);padding:7px 14px;border-radius:999px;border:2px solid transparent;font-weight:700}
+.nav a:hover{color:var(--ink);text-decoration:none;background:var(--violet-soft)}
+.nav a.on{color:#fff;background:var(--violet);border-color:var(--ink);box-shadow:2px 2px 0 var(--ink)}
+.qpill{margin-left:auto;font:700 12.5px var(--body);color:var(--ink-2);display:flex;align-items:center;gap:8px;
+  border:2px solid var(--ink);border-radius:999px;padding:6px 12px;background:#fff}
+.qpill:hover{text-decoration:none}
+.qpill.live{background:var(--sky-soft);color:var(--ink)}
+.qpill .dot{width:9px;height:9px;border-radius:50%;background:var(--ink-3)}
+.qpill.live .dot{background:var(--pink);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{transform:scale(.6);opacity:.5}}
+
+main{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:38px 28px 120px}
+h1{font:800 32px/1.1 var(--display);letter-spacing:-.03em;margin:0 0 8px;word-break:break-word}
+h2{font:700 18px/1.2 var(--display);letter-spacing:-.02em;margin:0 0 14px}
+h3{font:800 11px var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--violet);margin:0 0 12px}
+.sub{color:var(--ink-2);margin:0 0 26px;font-size:15px}
+.muted{color:var(--ink-3)}
+.mono{font-family:var(--mono);font-size:12.5px}
+section{margin-top:36px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.spread{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+
+.panel{background:var(--panel);border:2px solid var(--ink);border-radius:var(--r);padding:22px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:18px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+
+/* form */
+textarea,input[type=text],input[type=number],input[type=search],select{background:#fff;border:2px solid var(--ink);border-radius:12px;padding:10px 12px}
+textarea{width:100%;min-height:120px;resize:vertical;font-family:var(--mono);font-size:13px;line-height:1.6;background:var(--panel-2)}
+textarea:focus,input:focus,select:focus{outline:none;box-shadow:3px 3px 0 var(--pink)}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin:18px 0}
+.fields label{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:700;color:var(--ink-2)}
+.fields input{width:100%}
+.toggles{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0 20px}
+.toggles label{display:flex;gap:8px;align-items:center;color:var(--ink);cursor:pointer;font-weight:600;font-size:13.5px;
+  border:2px solid var(--ink);border-radius:999px;padding:6px 14px 6px 10px;background:#fff}
+.toggles label:has(input:checked){background:var(--violet-soft)}
+.toggles input{accent-color:var(--violet);width:16px;height:16px;margin:0}
+.btn{background:#fff;border:2px solid var(--ink);border-radius:999px;color:var(--ink);padding:8px 16px;cursor:pointer;font-weight:700;
+  white-space:nowrap;box-shadow:var(--shadow-sm);transition:transform .08s,box-shadow .08s;display:inline-block}
+.btn:hover{text-decoration:none;background:var(--yellow-soft)}
+.btn:active{transform:translate(3px,3px);box-shadow:0 0 0 var(--ink)}
+.btn.primary{background:var(--violet);color:#fff;font-size:15px;padding:10px 22px}
+.btn.primary:hover{background:#6A47FF}
+.btn.danger{color:#C2186B;background:var(--pink-soft)}
+.btn.danger:hover{background:var(--pink);color:#fff}
+.btn.sm{padding:4px 12px;font-size:12.5px;box-shadow:2px 2px 0 var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:var(--shadow-sm)}
+.hint{font-size:12.5px;color:var(--ink-3)}
+
+/* badges — stickers */
+.b{display:inline-block;font:800 10.5px var(--body);letter-spacing:.05em;text-transform:uppercase;padding:3px 10px;border:2px solid var(--ink);
+  border-radius:999px;color:var(--ink);background:#fff;white-space:nowrap}
+.b.green{background:var(--violet);color:#fff}
+.b.cyan{background:var(--sky-soft)}
+.b.amber{background:var(--yellow)}
+.b.pink{background:var(--pink);color:#fff}
+
+/* queue */
+.job{background:var(--panel);border:2px solid var(--ink);border-radius:var(--r);padding:18px 20px;margin-bottom:14px;box-shadow:var(--shadow)}
+.job.live{background:linear-gradient(135deg,#fff 60%,var(--sky-soft))}
+.job .head{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.job .dom{font:700 16px var(--display);word-break:break-all}
+.bar{height:14px;background:var(--panel-2);border:2px solid var(--ink);border-radius:999px;margin:14px 0 8px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:999px;transition:width .6s;
+  background:repeating-linear-gradient(-45deg,var(--violet) 0 10px,#9277FF 10px 20px);border-right:2px solid var(--ink)}
+.bar.indet i{width:30%!important;animation:slide 1.3s infinite ease-in-out;background:linear-gradient(90deg,var(--pink),var(--violet),var(--sky))}
+@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(340%)}}
+
+/* tables */
+.tw{overflow-x:auto;border:2px solid var(--ink);border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{font:800 10.5px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);text-align:left;padding:11px 12px;
+  border-bottom:2px solid var(--ink);background:var(--violet-soft);white-space:nowrap;position:sticky;top:0}
+th.sort{cursor:pointer;user-select:none}
+th.sort:hover{color:var(--ink)}
+th.sorted{color:var(--violet)}
+td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--yellow-soft);color:var(--ink)}
+td.url{font-family:var(--mono);font-size:12px;color:var(--ink);max-width:340px;min-width:170px;word-break:break-all}
+td.clip{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s2{color:#5B3CF0;font-weight:700} .s3{color:#0B86C9;font-weight:700} .s4{color:#E0650F;font-weight:700} .s5,.serr{color:#E0177C;font-weight:700}
+.empty{padding:36px;text-align:center;color:var(--ink-3);font-weight:600}
+
+/* stat tiles + facts */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.tile{padding:16px 18px;border:2px solid var(--ink);border-radius:var(--r);background:#fff;box-shadow:var(--shadow-sm)}
+/* tile colour follows meaning: pages/ok violet, redirects/speed blue, warnings yellow, failures pink */
+.tile:nth-child(1),.tile:nth-child(2){background:var(--violet-soft)}
+.tile:nth-child(3),.tile:nth-child(8){background:var(--sky-soft)}
+.tile:nth-child(4),.tile:nth-child(7){background:var(--yellow-soft)}
+.tile:nth-child(5),.tile:nth-child(6){background:var(--pink-soft)}
+.panel .tw{box-shadow:none;border-width:1.5px;border-radius:12px}
+.tile b{display:block;font:800 26px/1.1 var(--display);letter-spacing:-.03em;color:var(--ink)}
+.tile span{font-size:12px;font-weight:600;color:var(--ink-2)}
+.tile b.s2{color:#5B3CF0} .tile b.s4{color:#E0650F} .tile b.s5{color:#E0177C}
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:12px}
+.fact{background:#fff;border:2px solid var(--ink);border-radius:14px;padding:14px 16px;text-align:left;cursor:pointer;color:var(--ink);
+  display:flex;flex-direction:column;justify-content:flex-start;box-shadow:var(--shadow-sm);transition:transform .08s,box-shadow .08s}
+.fact:hover{background:var(--yellow-soft);transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
+.fact:active{transform:translate(3px,3px);box-shadow:none}
+.fact b{display:block;font:800 23px/1.15 var(--display);letter-spacing:-.02em}
+.fact:not(.zero) b{color:var(--pink)}
+.fact.zero{background:var(--panel-2);box-shadow:none;border-color:#BDB0E3}
+.fact.zero b{color:var(--ink-3)}
+.fact span{font-size:13px;font-weight:600;color:var(--ink-2)}
+.fact em{display:block;font:500 11.5px var(--body);color:var(--ink-3);font-style:normal;margin-top:3px}
+.note{border:2px solid var(--ink);border-radius:12px;padding:10px 14px;background:var(--sky-soft);color:var(--ink);font-size:13.5px;margin:0 0 18px;font-weight:500}
+.note.warn{background:var(--yellow)}
+dl.kv{display:grid;grid-template-columns:max-content 1fr;gap:7px 18px;margin:0;font-size:13px}
+dl.kv dt{color:var(--ink-3);font-weight:600}
+dl.kv dd{margin:0;color:var(--ink);word-break:break-word}
+ul.plain{list-style:none;padding:0;margin:0}
+ul.plain li{padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px;word-break:break-all}
+ul.plain li:last-child{border-bottom:0}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar input[type=search]{flex:1 1 240px}
+.pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:14px;font-size:12.5px;color:var(--ink-3);font-weight:600}
+.delta-good{color:#5B3CF0;font-weight:800} .delta-bad{color:#E0177C;font-weight:800}
+
+/* drawer */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(640px,100%);background:var(--ground);border-left:2px solid var(--ink);
+  z-index:40;transform:translateX(100%);transition:transform .22s cubic-bezier(.2,.9,.3,1.2);overflow-y:auto;padding:22px 26px 60px}
+.drawer.open{transform:none;box-shadow:-8px 0 0 var(--violet)}
+.drawer h2{word-break:break-all;font:600 15px var(--mono)}
+.drawer section{margin-top:22px;background:#fff;border:2px solid var(--ink);border-radius:14px;padding:16px}
+.outline div{font-size:13px;padding:2px 0;color:var(--ink-2)}
+.outline b{font:600 11px var(--mono);color:var(--violet);margin-right:8px}
+.scrim{position:fixed;inset:0;background:rgba(30,19,64,.35);z-index:30;display:none}
+.scrim.open{display:block}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) rotate(-1deg);background:var(--yellow);border:2px solid var(--ink);border-radius:999px;
+  padding:10px 20px;z-index:50;display:none;max-width:90vw;font-weight:700;box-shadow:var(--shadow-sm)}
+.toast.show{display:block}
+.toast.err{background:var(--pink);color:#fff}
+@media (max-width:700px){.top{gap:10px;padding:0 14px}.brand small{display:none}.brand{font-size:0;gap:0}.brand i{font-size:0}
+  main{padding:26px 16px 90px}.qpill span{display:none}h1{font-size:26px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#/"><i></i>crawlspace<small>by NEWBI</small></a>
+  <nav class="nav"><a href="#/" data-nav="home">New crawl</a><a href="#/sites" data-nav="sites">Sites</a></nav>
+  <a class="qpill" id="qpill" href="#/"><i class="dot"></i><span id="qtext">Idle</span></a>
+</header>
+<main id="app"></main>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Page detail"></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const app = $("#app");
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num = v => v == null ? "—" : Number(v).toLocaleString("en-IN");
+const DEFAULTS = {pages: 300, depth: 5, rps: 1, concurrency: 2, render: true, images: true, ignore_robots: false};
+let jobsCache = {active: [], recent: []};
+let viewToken = 0;   // bumps on every navigation, so stale async renders bail
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {headers: {"content-type": "application/json"}, ...opts});
+  const data = res.headers.get("content-type")?.includes("json") ? await res.json() : null;
+  if (!res.ok) throw new Error(data?.error || `${res.status} ${res.statusText}`);
+  return data;
+}
+function toast(msg, err = false) {
+  const t = $("#toast"); t.textContent = msg; t.className = "toast show" + (err ? " err" : "");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.className = "toast", 3800);
+}
+function ago(ts) {
+  if (!ts) return "—";
+  const ms = typeof ts === "number" ? ts * 1000 : Date.parse(ts);
+  const s = Math.round((Date.now() - ms) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return new Date(ms).toLocaleDateString("en-IN", {day: "numeric", month: "short", year: "numeric"});
+}
+function when(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-IN", {day: "numeric", month: "short", year: "numeric"}) +
+    (iso.length > 10 && !iso.endsWith("T00:00:00") ? ", " + d.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"}) : "");
+}
+function dur(sec) {
+  if (sec == null) return "";
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+}
+const host = url => { try { return new URL(url).host; } catch { return url; } };
+const statusClass = s => s == null ? "serr" : "s" + String(s)[0];
+
+const JOB_BADGE = {queued: ["", "Queued"], running: ["cyan", "Running"], done: ["green", "Done"],
+  cancelled: ["amber", "Stopped"], interrupted: ["amber", "Interrupted"], blocked: ["pink", "Blocked"], failed: ["pink", "Failed"]};
+const jobBadge = j => { const [c, t] = JOB_BADGE[j.status] || ["", j.status]; return `<span class="b ${c}">${t}</span>`; };
+function runBadge(r) {
+  if (r.status === "running" || !r.finished) return `<span class="b cyan">Running</span>`;
+  if (r.status === "blocked") return `<span class="b pink">Blocked</span>`;
+  if (r.status === "failed") return `<span class="b pink">Failed</span>`;
+  if (r.interrupted || r.status === "cancelled" || r.status === "interrupted") return `<span class="b amber">Stopped</span>`;
+  return r.complete ? `<span class="b green">Complete</span>` : `<span class="b amber">Hit page cap</span>`;
+}
+function settingsLine(s) {
+  if (!s || !Object.keys(s).length) return `<span class="muted">from terminal</span>`;
+  return `${num(s.pages)} pages · ${s.rps}/s${s.render ? "" : " · no JS"}${s.ignore_robots ? " · robots ignored" : ""}`;
+}
+
+// ------------------------------------------------------------ queue polling
+async function poll() {
+  try { jobsCache = await api("/api/jobs"); } catch { return schedule(6000); }
+  const running = jobsCache.active.filter(j => j.status === "running").length;
+  const queued = jobsCache.active.length - running;
+  const pill = $("#qpill");
+  pill.classList.toggle("live", running > 0);
+  $("#qtext").textContent = running || queued ? `${running} running · ${queued} queued` : "Idle";
+  if (currentRoute()[0] === "home") renderQueue();
+  schedule(jobsCache.active.length ? 1500 : 5000);
+}
+function schedule(ms) { clearTimeout(poll.t); poll.t = setTimeout(poll, ms); }
+
+// ------------------------------------------------------------ router
+function currentRoute() {
+  const parts = location.hash.replace(/^#\/?/, "").split("/").map(decodeURIComponent);
+  return [parts[0] || "home", ...parts.slice(1)];
+}
+function route() {
+  closeDrawer();
+  const [name, ...args] = currentRoute();
+  document.querySelectorAll("[data-nav]").forEach(a =>
+    a.classList.toggle("on", a.dataset.nav === (name === "home" ? "home" : "sites")));
+  const token = ++viewToken;
+  const views = {home: viewHome, sites: viewSites, site: viewSite, run: viewRun, compare: viewCompare};
+  window.scrollTo(0, 0);
+  (views[name] || viewHome)(token, ...args).catch(e => {
+    if (token === viewToken) app.innerHTML = `<div class="empty">${esc(e.message)}<br><br><a href="#/sites">Back to sites</a></div>`;
+  });
+}
+window.addEventListener("hashchange", route);
+
+// ------------------------------------------------------------ home
+async function viewHome() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("cs.settings") || "{}"); } catch {}
+  const s = {...DEFAULTS, ...saved};
+  app.innerHTML = `
+    <h1>New crawl</h1>
+    <p class="sub">Drop one site, or paste a whole list. They line up and run one after another, so close the tab and come back later.</p>
+    <div class="panel">
+      <textarea id="domains" spellcheck="false" placeholder="example.com&#10;another-site.in&#10;…one per line for a bulk crawl ✦"></textarea>
+      <div class="fields">
+        <label>Max pages per site<input type="number" id="f-pages" min="1" max="5000" value="${s.pages}"></label>
+        <label>Max click depth<input type="number" id="f-depth" min="1" max="20" value="${s.depth}"></label>
+        <label>Speed (requests / sec)<input type="number" id="f-rps" min="0.1" max="5" step="0.1" value="${s.rps}"></label>
+        <label>Pages at once<input type="number" id="f-concurrency" min="1" max="6" value="${s.concurrency}"></label>
+      </div>
+      <div class="toggles">
+        <label><input type="checkbox" id="f-render" ${s.render ? "checked" : ""}> Render JavaScript (needed for Wix, Shopify, React)</label>
+        <label><input type="checkbox" id="f-images" ${s.images ? "checked" : ""}> Measure image sizes</label>
+        <label><input type="checkbox" id="f-ignore_robots" ${s.ignore_robots ? "checked" : ""}> Ignore robots.txt <span class="muted">— only for sites we own</span></label>
+      </div>
+      <div class="row"><button class="btn primary" id="start" disabled>Start crawl</button><span class="hint" id="estimate"></span></div>
+    </div>
+    <section id="queue"></section>`;
+  const ta = $("#domains");
+  const count = () => ta.value.split("\n").flatMap(l => l.split("#")[0].split(/[\s,]+/)).filter(Boolean).length;
+  const update = () => {
+    const n = count(), st = readSettings();
+    $("#start").disabled = !n;
+    $("#start").textContent = n > 1 ? `Queue ${n} crawls` : "Start crawl";
+    const mins = Math.max(1, Math.round(st.pages / st.rps / 60));
+    $("#estimate").textContent = n ? `Up to ~${mins} min per site at this speed${n > 1 ? `, ~${Math.round(mins * n / 60 * 10) / 10} h for the list` : ""}. Smaller sites finish sooner.` : "";
+  };
+  $(".panel").addEventListener("input", update);
+  $("#start").onclick = async () => {
+    const settings = readSettings();
+    try { localStorage.setItem("cs.settings", JSON.stringify(settings)); } catch {}
+    $("#start").disabled = true;
+    try {
+      const r = await api("/api/jobs", {method: "POST", body: JSON.stringify({domains: ta.value, settings})});
+      ta.value = ""; update();
+      toast(r.ids.length > 1 ? `${r.ids.length} crawls queued` : `Crawling ${host(r.domains[0])}`);
+      poll();
+    } catch (e) { toast(e.message, true); update(); }
+  };
+  ta.focus();
+  renderQueue();
+}
+function readSettings() {
+  const v = id => $("#f-" + id);
+  return {pages: +v("pages").value, depth: +v("depth").value, rps: +v("rps").value, concurrency: +v("concurrency").value,
+    render: v("render").checked, images: v("images").checked, ignore_robots: v("ignore_robots").checked};
+}
+function renderQueue() {
+  const el = $("#queue");
+  if (!el) return;
+  const {active, recent} = jobsCache;
+  const running = active.filter(j => j.status === "running");
+  const queued = active.filter(j => j.status === "queued");
+  let html = "";
+  if (running.length || queued.length) {
+    html += `<div class="spread"><h2>Queue</h2>${queued.length > 1 ? `<button class="btn sm danger" data-act="clear">Clear ${queued.length} queued</button>` : ""}</div>`;
+    for (const j of running) {
+      const p = j.progress || {};
+      const target = p.queued != null ? Math.min(p.cap, p.fetched + p.queued) : 0;
+      const pct = target ? Math.min(100, Math.round(100 * p.fetched / target)) : 0;
+      html += `<div class="job live"><div class="head"><span class="dom">${esc(host(j.domain))}</span>${jobBadge(j)}${j.resume ? `<span class="b">Resumed</span>` : ""}
+        <span style="margin-left:auto"></span><button class="btn sm danger" data-act="cancel" data-id="${j.id}">Stop</button></div>
+        <div class="bar ${p.phase !== "crawling" ? "indet" : ""}"><i style="width:${pct}%"></i></div>
+        <div class="hint mono">${p.phase === "crawling"
+          ? `${num(p.fetched)} pages fetched · ${num(p.queued)} waiting · cap ${num(p.cap)} · ${dur(p.elapsed)}`
+          : "Starting: checking the site's address, robots.txt and sitemaps…"}</div></div>`;
+    }
+    if (queued.length) {
+      html += `<div class="tw"><table><thead><tr><th>#</th><th>Site</th><th>Settings</th><th>Added</th><th></th></tr></thead><tbody>` +
+        queued.map((j, i) => `<tr><td class="n">${i + 1}</td><td class="url">${esc(j.domain)}</td><td>${settingsLine(j.settings)}</td>
+          <td>${ago(j.created)}</td><td class="n"><button class="btn sm" data-act="cancel" data-id="${j.id}">Remove</button></td></tr>`).join("") +
+        `</tbody></table></div>`;
+    }
+  }
+  html += `<section><h2>Recent crawls</h2>`;
+  if (!recent.length) html += `<div class="panel empty">Nothing here yet ✦ start one above</div>`;
+  else html += `<div class="tw"><table><thead><tr><th>Site</th><th>Result</th><th class="n">Pages</th><th>Finished</th><th>Note</th><th></th></tr></thead><tbody>` +
+    recent.map(j => {
+      const canOpen = j.host && j.run && j.pages;
+      const resumedLater = [...active, ...recent].some(x => x.id > j.id && x.resume && x.host === j.host && x.run === j.run);
+      const canResume = ["interrupted", "cancelled", "failed", "blocked"].includes(j.status) && j.pages && !resumedLater;
+      return `<tr><td class="url">${canOpen ? `<a href="#/run/${encodeURIComponent(j.host)}/${encodeURIComponent(j.run)}">${esc(host(j.domain))}</a>` : esc(host(j.domain))}</td>
+        <td>${jobBadge(j)}</td><td class="n">${num(j.pages)}</td><td>${ago(j.finished)}</td><td class="clip" title="${esc(j.message)}">${esc(j.message || "")}</td>
+        <td class="n"><div class="row" style="justify-content:flex-end;gap:6px">
+          ${canOpen ? `<a class="btn sm" href="#/run/${encodeURIComponent(j.host)}/${encodeURIComponent(j.run)}">Results</a>` : ""}
+          ${canResume ? `<button class="btn sm" data-act="resume" data-id="${j.id}">Resume</button>` : ""}
+          <button class="btn sm" data-act="again" data-id="${j.id}">Run again</button></div></td></tr>`;
+    }).join("") + `</tbody></table></div>`;
+  html += `</section>`;
+  el.innerHTML = html;
+}
+app.addEventListener("click", async e => {
+  const b = e.target.closest("[data-act]");
+  if (!b) return;
+  const id = b.dataset.id, act = b.dataset.act;
+  try {
+    if (act === "cancel") { await api(`/api/jobs/${id}/cancel`, {method: "POST"}); toast("Stopped"); }
+    else if (act === "clear") { const r = await api("/api/jobs/clear", {method: "POST"}); toast(`${r.removed} removed from queue`); }
+    else if (act === "resume") { await api(`/api/jobs/${id}/resume`, {method: "POST"}); toast("Resuming — already-fetched pages are kept"); }
+    else if (act === "again") {
+      const j = jobsCache.recent.find(x => String(x.id) === id);
+      await api("/api/jobs", {method: "POST", body: JSON.stringify({domains: j.domain, settings: j.settings})});
+      toast(`Queued ${host(j.domain)}`);
+    } else return;
+    poll();
+  } catch (err) { toast(err.message, true); }
+});
+
+// ------------------------------------------------------------ sites
+async function viewSites(token) {
+  const sites = await api("/api/sites");
+  if (token !== viewToken) return;
+  app.innerHTML = `<div class="spread"><div><h1>Sites</h1><p class="sub" style="margin:0">Every site crawled from here or from the terminal.</p></div>
+    <input type="search" id="q" placeholder="Filter sites" style="width:260px"></div><div id="list"></div>`;
+  const draw = () => {
+    const q = $("#q").value.toLowerCase();
+    const rows = sites.filter(s => s.host.toLowerCase().includes(q));
+    $("#list").innerHTML = !rows.length ? `<div class="panel empty">${sites.length ? "No match." : "No crawls yet. <a href='#/'>Start one</a>."}</div>` :
+      `<div class="tw"><table><thead><tr><th>Site</th><th class="n">Crawls</th><th>Last crawl</th><th class="n">Pages</th><th>Last result</th></tr></thead><tbody>` +
+      rows.map(s => `<tr class="click" data-href="#/site/${encodeURIComponent(s.host)}"><td class="url">${esc(s.latest.root ? host(s.latest.root) : s.host)}</td>
+        <td class="n">${s.runs}</td><td>${when(s.latest.started)}</td><td class="n">${num(s.latest.pages)}</td><td>${runBadge(s.latest)}</td></tr>`).join("") +
+      `</tbody></table></div>`;
+  };
+  $("#q").oninput = draw; draw();
+}
+app.addEventListener("click", e => {
+  const tr = e.target.closest("tr[data-href]");
+  if (tr && !e.target.closest("a,button,input")) location.hash = tr.dataset.href;
+});
+
+// ------------------------------------------------------------ one site
+async function viewSite(token, h) {
+  const data = await api(`/api/sites/${encodeURIComponent(h)}`);
+  if (token !== viewToken) return;
+  const runs = data.runs, latest = runs[0];
+  app.innerHTML = `<div class="spread"><div><p class="muted mono" style="margin:0 0 6px"><a href="#/sites">Sites</a> /</p>
+      <h1>${esc(latest.root ? host(latest.root) : h)}</h1><p class="sub" style="margin:0">${runs.length} crawl${runs.length > 1 ? "s" : ""}. Tick two to see what changed between them.</p></div>
+      <div class="row"><button class="btn" id="cmp" disabled>Compare selected</button><button class="btn primary" id="again">Crawl again</button></div></div>
+    <div class="tw"><table><thead><tr><th></th><th>Started</th><th>Result</th><th class="n">Pages</th><th>Settings</th><th></th></tr></thead><tbody>` +
+    runs.map(r => `<tr class="click" data-href="#/run/${encodeURIComponent(h)}/${encodeURIComponent(r.run)}">
+      <td style="width:34px"><input type="checkbox" class="pick" value="${esc(r.run)}" aria-label="Select for comparison"></td>
+      <td>${when(r.started)}</td><td>${runBadge(r)}</td><td class="n">${num(r.pages)}</td><td>${settingsLine(r.settings)}</td>
+      <td class="n"><button class="btn sm danger" data-del="${esc(r.run)}">Delete</button></td></tr>`).join("") + `</tbody></table></div>`;
+  const picks = () => [...app.querySelectorAll(".pick:checked")].map(x => x.value);
+  app.querySelectorAll(".pick").forEach(cb => cb.onchange = () => {
+    const p = picks();
+    if (p.length > 2) { cb.checked = false; return toast("Pick two crawls to compare"); }
+    $("#cmp").disabled = p.length !== 2;
+  });
+  $("#cmp").onclick = () => { const [b, a] = picks().sort().reverse(); location.hash = `#/compare/${encodeURIComponent(h)}/${encodeURIComponent(a)}/${encodeURIComponent(b)}`; };
+  $("#again").onclick = () => crawlAgain(latest.root, latest.settings);
+  app.querySelectorAll("[data-del]").forEach(b => b.onclick = e => { e.stopPropagation(); confirmDelete(b, h, b.dataset.del, () => route()); });
+}
+async function crawlAgain(root, settings) {
+  try {
+    await api("/api/jobs", {method: "POST", body: JSON.stringify({domains: root, settings: Object.keys(settings || {}).length ? settings : undefined})});
+    toast(`Queued ${host(root)}`); location.hash = "#/";
+  } catch (e) { toast(e.message, true); }
+}
+function confirmDelete(btn, h, run, done) {
+  if (btn.dataset.armed) {
+    api(`/api/runs/${encodeURIComponent(h)}/${encodeURIComponent(run)}`, {method: "DELETE"})
+      .then(() => { toast("Crawl deleted"); done(); }).catch(e => toast(e.message, true));
+    return;
+  }
+  btn.dataset.armed = "1"; btn.textContent = "Click again to delete";
+  setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = "Delete"; } }, 4000);
+}
+
+// ------------------------------------------------------------ one run
+const FILTERS = [
+  ["all", "All pages", () => true],
+  ["html", "HTML pages", r => r.html],
+  ["errors", "Errors (4xx, 5xx, failed)", r => r.status == null || r.status >= 400],
+  ["redirects", "Redirected", r => r.redirects > 0],
+  ["no_title", "No title", r => okHtml(r) && !r.title],
+  ["no_meta", "No meta description", r => okHtml(r) && !r.meta],
+  ["no_h1", "No H1", r => okHtml(r) && r.h1_count === 0],
+  ["multi_h1", "Multiple H1", r => okHtml(r) && r.h1_count > 1],
+  ["no_canonical", "No canonical", r => okHtml(r) && !r.canonical],
+  ["canonical_other", "Canonical points elsewhere", r => okHtml(r) && r.canonical_other],
+  ["noindex", "Noindex", r => okHtml(r) && r.noindex],
+  ["thin", "Under 250 words", r => okHtml(r) && r.words < 250],
+  ["dup_titles", "Duplicate titles", r => okHtml(r) && !r.noindex && r.title && dupTitles.has(r.title.trim().toLowerCase())],
+  ["dup_meta", "Duplicate meta descriptions", r => okHtml(r) && !r.noindex && r.meta && dupMeta.has(r.meta.trim().toLowerCase())],
+  ["js_dependent", "JS-dependent (rendered >3× raw)", r => okHtml(r) && r.js_ratio > 3],
+  ["img_no_alt", "Has images without alt", r => r.img_no_alt > 0],
+  ["img_big", "Has images over 200KB", r => r.img_big > 0],
+  ["orphan", "Orphan pages", r => r.orphan],
+  ["sd_invalid", "Broken structured data", r => r.sd_invalid],
+  ["deep", "Deeper than 4 clicks", r => r.depth > 4],
+];
+let dupTitles = new Set(), dupMeta = new Set();
+const okHtml = r => r.html && r.status >= 200 && r.status < 300;
+const COLS = [
+  ["path", "Page"], ["status", "Status", "n"], ["title", "Title"], ["title_px", "Title px", "n"], ["meta_len", "Meta len", "n"],
+  ["h1_count", "H1s", "n"], ["words", "Words", "n"], ["depth", "Depth", "n"], ["inlinks", "Links in", "n"], ["ms", "ms", "n"], ["template", "Template"],
+];
+let table = null;
+
+async function viewRun(token, h, run) {
+  const [s, sitesData] = await Promise.all([
+    api(`/api/runs/${encodeURIComponent(h)}/${encodeURIComponent(run)}`),
+    api(`/api/sites/${encodeURIComponent(h)}`).catch(() => ({runs: []})),
+  ]);
+  if (token !== viewToken) return;
+  const base = `/api/runs/${encodeURIComponent(h)}/${encodeURIComponent(run)}`;
+  const older = sitesData.runs.filter(r => r.run < run)[0];
+  const f = s.facts, t = s.totals, fb = s.facts_base;
+  const brief = {status: s.job?.status, finished: s.finished, complete: s.complete, interrupted: s.interrupted};
+  const fact = (key, n, label, extra = "") =>
+    `<button class="fact ${n ? "" : "zero"}" data-filter="${key}"><b>${num(n)}</b><span>${label}</span>${extra ? `<em>${extra}</em>` : ""}</button>`;
+  const variants = Object.entries(s.host.variants || {});
+  app.innerHTML = `
+    <div class="spread"><div>
+      <p class="muted mono" style="margin:0 0 6px"><a href="#/sites">Sites</a> / <a href="#/site/${encodeURIComponent(h)}">${esc(host(s.root || h))}</a> /</p>
+      <h1>${esc(host(s.root || h))}</h1>
+      <div class="row" style="gap:10px">${runBadge(brief)}<span class="muted">${when(s.started)}</span><span class="muted">·</span>
+        <span class="muted">${settingsLine(s.job?.settings)}</span>${s.root ? `<a href="${esc(s.root)}" target="_blank" rel="noopener" class="mono">${esc(s.root)}</a>` : ""}</div>
+    </div>
+    <div class="row">
+      ${older ? `<a class="btn" href="#/compare/${encodeURIComponent(h)}/${encodeURIComponent(older.run)}/${encodeURIComponent(run)}">Compare with previous</a>` : ""}
+      <a class="btn" href="${base}/download/pages.csv">CSV</a><a class="btn" href="${base}/download/pages.jsonl">pages.jsonl</a>
+      ${s.finished ? `<a class="btn" href="${base}/download/site.json">site.json</a>` : ""}
+      <button class="btn primary" id="again">Crawl again</button>
+    </div></div>
+    ${s.busy || !s.finished ? `<div class="note">This crawl is still running. Numbers so far are shown; refresh for the latest.</div>` : ""}
+    ${s.finished && !s.complete && !s.interrupted ? `<div class="note warn">The crawl hit its ${num(s.job?.settings?.pages || t.pages)}-page cap with ${num(s.frontier.queued)} URLs still waiting, so site-wide numbers (orphans, duplicates) are not final. Crawl again with a higher cap for a complete picture.</div>` : ""}
+    ${s.job?.status === "blocked" ? `<div class="note warn">${esc(s.job.message)}</div>` : ""}
+
+    <div class="tiles">
+      <div class="tile"><b>${num(t.pages)}</b><span>pages crawled</span></div>
+      <div class="tile"><b class="s2">${num(t.ok)}</b><span>OK (2xx)</span></div>
+      <div class="tile"><b>${num(t.redirected)}</b><span>redirected</span></div>
+      <div class="tile"><b class="${t.client_errors ? "s4" : ""}">${num(t.client_errors)}</b><span>4xx errors</span></div>
+      <div class="tile"><b class="${t.server_errors ? "s5" : ""}">${num(t.server_errors)}</b><span>5xx errors</span></div>
+      <div class="tile"><b class="${t.fetch_errors ? "s5" : ""}">${num(t.fetch_errors)}</b><span>failed to load</span></div>
+      <div class="tile"><b>${num(t.robots_blocked)}</b><span>blocked by robots.txt</span></div>
+      <div class="tile"><b>${t.avg_ms == null ? "—" : num(t.avg_ms) + "<small style='font-size:14px'> ms</small>"}</b><span>avg server response</span></div>
+    </div>
+
+    <section>
+      <div class="spread" style="margin-bottom:10px"><h2 style="margin:0">Crawl facts</h2><span class="hint">Measured, not graded yet. Severity and scores arrive with the checks. Click any card to list the pages.</span></div>
+      <div class="facts">
+        ${fact("no_title", f.no_title, "no title", `of ${num(fb)} pages`)}
+        ${fact("no_meta", f.no_meta, "no meta description", `of ${num(fb)} pages`)}
+        ${fact("no_h1", f.no_h1, "no H1")}
+        ${fact("multi_h1", f.multi_h1, "more than one H1")}
+        ${fact("dup_titles", f.dup_titles.pages, "pages share a title", `${num(f.dup_titles.groups)} groups`)}
+        ${fact("dup_meta", f.dup_meta.pages, "pages share a meta description", `${num(f.dup_meta.groups)} groups`)}
+        ${fact("thin", f.thin, "under 250 words")}
+        ${fact("no_canonical", f.no_canonical, "no canonical")}
+        ${fact("canonical_other", f.canonical_other, "canonical points elsewhere")}
+        ${fact("noindex", f.noindex, "set to noindex")}
+        ${fact("js_dependent", f.js_dependent, "content needs JavaScript", "rendered page >3× raw HTML")}
+        ${fact("img_no_alt", f.img_no_alt, "images without alt", "unique images")}
+        ${fact("img_big", s.images.over_200kb || 0, "images over 200KB", s.images.largest_bytes ? `largest ${num(Math.round(s.images.largest_bytes / 1024))}KB` : "")}
+        ${s.orphans_valid ? fact("orphan", s.orphans.length, "orphan pages", "in sitemap, no internal links") :
+          `<div class="fact zero" style="cursor:default"><b>—</b><span>orphan pages</span><em>needs a complete crawl</em></div>`}
+        ${fact("sd_invalid", f.sd_invalid, "broken structured data", `${num(f.sd_pages)} pages have some`)}
+      </div>
+    </section>
+
+    <section class="grid g2">
+      <div class="panel"><h3>Site address</h3>
+        <dl class="kv"><dt>Real address</dt><dd class="mono">${esc(s.host.canonical || "—")}</dd></dl>
+        ${variants.length ? `<div class="tw" style="margin-top:12px"><table><thead><tr><th>Address tried</th><th class="n">Status</th><th>Ends up at</th></tr></thead><tbody>` +
+          variants.map(([v, r]) => `<tr><td class="url">${esc(v)}</td><td class="n ${statusClass(r.status)}">${r.error ? "error" : esc(r.status)}</td>
+            <td class="url">${r.error ? `<span class="serr">${esc(r.error)}</span>` : r.redirected ? esc(r.final_url) : `<span class="muted">answers directly</span>`}</td></tr>`).join("") + `</tbody></table></div>` : ""}
+        ${(s.host.notes || []).map(n => `<p class="hint" style="margin:10px 0 0">${esc(n)}</p>`).join("")}
+      </div>
+      <div class="panel"><h3>Sitemap</h3>
+        <dl class="kv">
+          <dt>Found</dt><dd>${s.sitemap.exists == null ? "—" : s.sitemap.exists ? "Yes" : `<span class="s4">No sitemap found</span>`}</dd>
+          <dt>Listed in robots.txt</dt><dd>${s.sitemap.declared == null ? "—" : s.sitemap.declared ? "Yes" : `<span class="s4">No</span>`}</dd>
+          <dt>URLs listed</dt><dd>${num(s.sitemap.urls)}</dd>
+          <dt>Files read</dt><dd>${s.sitemap.sources.map(x => `<div class="mono">${esc(x)}</div>`).join("") || "—"}</dd>
+          ${s.sitemap.errors?.length ? `<dt>Errors</dt><dd>${s.sitemap.errors.map(e => `<div class="mono serr">${esc(e.url || "")} ${esc(e.error || "")}</div>`).join("")}</dd>` : ""}
+        </dl></div>
+      <div class="panel"><h3>Templates</h3>
+        <dl class="kv"><dt>Distinct templates</dt><dd>${num(s.templates.distinct)} across ${num(s.templates.pages_with_signature)} pages</dd></dl>
+        ${(s.templates.representatives || []).length ? `<p class="hint" style="margin:12px 0 6px">One example page per template:</p><ul class="plain">${s.templates.representatives.slice(0, 12).map(u => `<li class="mono">${esc(u)}</li>`).join("")}</ul>` : ""}
+      </div>
+      <div class="panel"><h3>Crawl</h3>
+        <dl class="kv">
+          <dt>URLs discovered</dt><dd>${num(s.frontier.seen)}</dd>
+          <dt>Left in queue</dt><dd>${num(s.frontier.queued)}</dd>
+          <dt>External links</dt><dd>${num(s.frontier.offsite_unique)} unique (${num(s.frontier.skipped_offsite)} links)</dd>
+          <dt>Too deep, skipped</dt><dd>${num(s.frontier.skipped_depth)}</dd>
+          <dt>Rendered in browser</dt><dd>${num(s.render.rendered)}${s.render.render_failures ? ` · <span class="s5">${num(s.render.render_failures)} failed</span>` : ""}${s.render.never_idle_pct >= 90 ? ` · <span class="muted">network never idle (normal for this platform)</span>` : ""}</dd>
+          <dt>Crawl traps skipped</dt><dd>${Object.entries(s.traps).length ? Object.entries(s.traps).map(([k, v]) => `<div>${num(v)} × <span class="mono">${esc(k)}</span></div>`).join("") : "None"}</dd>
+        </dl></div>
+      ${s.slowest.length ? `<div class="panel"><h3>Slowest pages</h3><ul class="plain">${s.slowest.map(x => `<li><span class="mono">${num(x.ms)} ms</span> &nbsp;<span class="mono muted">${esc(x.url)}</span></li>`).join("")}</ul></div>` : ""}
+      ${s.errors.length ? `<div class="panel"><h3>Pages that failed to load</h3><ul class="plain">${s.errors.map(x => `<li><span class="mono">${esc(x.url)}</span><br><span class="serr mono">${esc(x.error)}</span></li>`).join("")}</ul></div>` : ""}
+    </section>
+
+    <section id="pages"><h2>Pages</h2>
+      <div class="toolbar"><input type="search" id="tq" placeholder="Search URL, title, H1">
+        <select id="tf">${FILTERS.map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select>
+        <span class="hint" id="tcount"></span></div>
+      <div class="tw" id="tbody"><div class="empty">Loading pages…</div></div>
+      <div class="pager"><button class="btn sm" id="prev">Previous</button><span id="ppos"></span><button class="btn sm" id="next">Next</button></div>
+    </section>`;
+  $("#again").onclick = () => crawlAgain(s.root, s.job?.settings);
+  app.querySelectorAll("[data-filter]").forEach(b => b.onclick = () => {
+    $("#tf").value = b.dataset.filter; table.page = 0; drawTable(); $("#pages").scrollIntoView({behavior: "smooth"});
+  });
+
+  const rows = await api(`${base}/pages`);
+  if (token !== viewToken) return;
+  const dupSet = key => {
+    const c = new Map();
+    rows.filter(r => okHtml(r) && !r.noindex && r[key]).forEach(r => { const k = r[key].trim().toLowerCase(); c.set(k, (c.get(k) || 0) + 1); });
+    return new Set([...c].filter(([, n]) => n > 1).map(([k]) => k));
+  };
+  dupTitles = dupSet("title"); dupMeta = dupSet("meta");
+  table = {rows, base, sort: null, dir: 1, page: 0, size: 100};
+  $("#tq").oninput = () => { table.page = 0; drawTable(); };
+  $("#tf").onchange = () => { table.page = 0; drawTable(); };
+  $("#prev").onclick = () => { table.page--; drawTable(); };
+  $("#next").onclick = () => { table.page++; drawTable(); };
+  drawTable();
+}
+function drawTable() {
+  const q = $("#tq").value.trim().toLowerCase();
+  const pred = FILTERS.find(x => x[0] === $("#tf").value)[2];
+  let rows = table.rows.filter(r => pred(r) && (!q || [r.url, r.title, r.h1].some(v => v && v.toLowerCase().includes(q))));
+  if (table.sort) {
+    const k = table.sort, d = table.dir;
+    rows = [...rows].sort((a, b) => {
+      const x = a[k], y = b[k];
+      if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+      return (typeof x === "number" ? x - y : String(x).localeCompare(String(y))) * d;
+    });
+  }
+  const pages = Math.max(1, Math.ceil(rows.length / table.size));
+  table.page = Math.min(Math.max(0, table.page), pages - 1);
+  const slice = rows.slice(table.page * table.size, (table.page + 1) * table.size);
+  $("#tcount").textContent = `${num(rows.length)} of ${num(table.rows.length)} pages`;
+  $("#ppos").textContent = rows.length ? `${num(table.page * table.size + 1)}–${num(table.page * table.size + slice.length)} of ${num(rows.length)}` : "";
+  $("#prev").disabled = table.page === 0; $("#next").disabled = table.page >= pages - 1;
+  if (!slice.length) { $("#tbody").innerHTML = `<div class="empty">No pages match.</div>`; return; }
+  const cell = (r, k) => {
+    switch (k) {
+      case "path": return `<td class="url">${esc(r.path)}${r.redirects ? ` <span class="b cyan">→</span>` : ""}${r.orphan ? ` <span class="b amber">orphan</span>` : ""}${r.noindex ? ` <span class="b">noindex</span>` : ""}</td>`;
+      case "status": return `<td class="n ${statusClass(r.status)}">${r.status ?? (r.error === "blocked_by_robots" ? "robots" : "fail")}</td>`;
+      case "title": return `<td class="clip" title="${esc(r.title)}">${r.title ? esc(r.title) : r.html && r.status < 300 ? `<span class="s4">missing</span>` : ""}</td>`;
+      case "meta_len": return `<td class="n">${r.meta_len ?? (r.html && r.status < 300 ? `<span class="s4">none</span>` : "")}</td>`;
+      case "h1_count": return `<td class="n ${r.html && r.status < 300 && r.h1_count !== 1 ? "s4" : ""}">${r.html ? r.h1_count : ""}</td>`;
+      case "template": return `<td class="mono muted">${esc(r.template || "")}</td>`;
+      default: return `<td class="n">${r[k] == null || (!r.html && ["words", "title_px", "inlinks"].includes(k)) ? "" : num(r[k])}</td>`;
+    }
+  };
+  $("#tbody").innerHTML = `<table><thead><tr>${COLS.map(([k, l, c]) =>
+    `<th class="sort ${c || ""} ${table.sort === k ? "sorted" : ""}" data-sort="${k}">${l}${table.sort === k ? (table.dir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead><tbody>` +
+    slice.map(r => `<tr class="click" data-url="${esc(r.url)}">${COLS.map(([k]) => cell(r, k)).join("")}</tr>`).join("") + `</tbody></table>`;
+  $("#tbody").querySelectorAll("th[data-sort]").forEach(th => th.onclick = () => {
+    const k = th.dataset.sort;
+    if (table.sort === k) table.dir = -table.dir; else { table.sort = k; table.dir = ["path", "title", "template"].includes(k) ? 1 : -1; }
+    drawTable();
+  });
+  $("#tbody").querySelectorAll("tr[data-url]").forEach(tr => tr.onclick = () => openPage(tr.dataset.url));
+}
+
+// ------------------------------------------------------------ page drawer
+async function openPage(url) {
+  const d = $("#drawer");
+  d.innerHTML = `<div class="empty">Loading…</div>`; d.classList.add("open"); $("#scrim").classList.add("open");
+  let r;
+  try { r = await api(`${table.base}/page?url=${encodeURIComponent(url)}`); } catch (e) { d.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  const kv = pairs => `<dl class="kv">${pairs.filter(p => p[1] !== undefined).map(([k, v]) => `<dt>${k}</dt><dd>${v === null || v === "" ? `<span class="muted">—</span>` : v}</dd>`).join("")}</dl>`;
+  const t = r.title || {}, m = r.meta_description || {};
+  const sd = r.structured_data || [], imgs = r.images || [], il = r.internal_links || [], el = r.external_links || [];
+  d.innerHTML = `<div class="spread" style="align-items:flex-start"><h2>${esc(r.url)}</h2><button class="btn sm" id="dclose">Close</button></div>
+    <a href="${esc(r.final_url || r.url)}" target="_blank" rel="noopener">Open page ↗</a>
+    <section><h3>Response</h3>${kv([
+      ["Status", `<span class="${statusClass(r.status)}">${esc(r.status ?? "—")}</span>`],
+      ["Error", r.fetch_error ? `<span class="serr mono">${esc(r.fetch_error)}</span>` : undefined],
+      ["Final URL", r.final_url && r.final_url !== r.url ? `<span class="mono">${esc(r.final_url)}</span>` : undefined],
+      ["Redirect chain", (r.redirect_chain || []).length ? r.redirect_chain.map(u => `<div class="mono">${esc(u)}</div>`).join("") : undefined],
+      ["Server response", r.response_ms != null ? `${num(r.response_ms)} ms` : null],
+      ["Content type", esc(r.content_type)], ["Click depth", num(r.depth)],
+      ["Found via", esc((r.discovered_via || []).join(", "))],
+      ["HTML size", `${num(r.raw_html_len)} raw${r.rendered_html_len ? ` · ${num(r.rendered_html_len)} rendered` : ""}${r.render_timed_out ? ` <span class="muted">(network never idle)</span>` : ""}`],
+      ["Template", `<span class="mono">${esc(r.template_signature || "")}</span>`],
+    ])}</section>
+    ${r.title !== undefined && (r.content_type || "").includes("html") ? `
+    <section><h3>On-page</h3>${kv([
+      ["Title", t.text ? `${esc(t.text)}<div class="hint mono">${t.len} chars · ${t.px_width}px wide</div>` : null],
+      ["Meta description", m.text ? `${esc(m.text)}<div class="hint mono">${m.len} chars</div>` : null],
+      ["Canonical", r.canonical ? `<span class="mono">${esc(r.canonical)}</span>` : null],
+      ["Robots meta", esc(r.robots_meta || "")], ["X-Robots-Tag", (r.headers || {})["x-robots-tag"] ? esc(r.headers["x-robots-tag"]) : undefined],
+      ["H1", (r.h1 || []).length ? r.h1.map(x => `<div>${esc(x)}</div>`).join("") : null],
+      ["Words", num(r.word_count)],
+    ])}</section>
+    ${(r.heading_outline || []).length ? `<section><h3>Heading outline</h3><div class="outline">${r.heading_outline.slice(0, 80).map(([tag, lvl], i) =>
+      `<div style="padding-left:${lvl * 18}px"><b>${esc(tag)}</b></div>`).join("")}</div></section>` : ""}
+    <section><h3>Images (${num(imgs.length)})</h3>${imgs.length ? `<ul class="plain">${imgs.slice(0, 60).map(i =>
+      `<li><span class="mono">${esc(i.src)}</span><div class="hint">${i.alt === null ? `<span class="s4">no alt attribute</span>` : i.alt === "" ? "decorative (alt=\"\")" : "alt: " + esc(i.alt)}${i.bytes ? ` · ${num(Math.round(i.bytes / 1024))}KB` : ""}${i.lazy ? " · lazy" : ""}</div></li>`).join("")}</ul>` : `<span class="muted">None</span>`}</section>
+    <section><h3>Links</h3>${kv([["Internal", num(il.length)], ["External", num(el.length)], ["Nofollow", num([...il, ...el].filter(l => l.nofollow).length)]])}
+      ${il.length ? `<details style="margin-top:10px"><summary class="hint" style="cursor:pointer">Show internal links</summary><ul class="plain">${il.slice(0, 200).map(l =>
+        `<li><span class="mono">${esc(l.href)}</span><div class="hint">${esc(l.anchor || "(no anchor text)")}${l.nofollow ? " · nofollow" : ""}</div></li>`).join("")}</ul></details>` : ""}</section>
+    <section><h3>Structured data (${num(sd.length)})</h3>${sd.length ? `<ul class="plain">${sd.map(x => x._invalid
+      ? `<li class="serr">Invalid JSON-LD: ${esc(x._error)}</li>`
+      : `<li><span class="b cyan">${esc(x._format)}</span> ${esc([].concat(x["@type"] || "untyped").join(", "))}</li>`).join("")}</ul>` : `<span class="muted">None</span>`}</section>
+    ${Object.keys(r.og || {}).length ? `<section><h3>Open Graph</h3>${kv(Object.entries(r.og).map(([k, v]) => [esc(k), esc(v)]))}</section>` : ""}
+    ${(r.hreflang || []).length ? `<section><h3>hreflang</h3><ul class="plain">${r.hreflang.map(x => `<li class="mono">${esc(x.lang || x.hreflang || "")} → ${esc(x.href || "")}</li>`).join("")}</ul></section>` : ""}` : ""}
+    ${Object.keys(r.headers || {}).length ? `<section><h3>Headers</h3>${kv(Object.entries(r.headers).map(([k, v]) => [esc(k), `<span class="mono">${esc(v)}</span>`]))}</section>` : ""}`;
+  $("#dclose").onclick = closeDrawer;
+}
+function closeDrawer() { $("#drawer").classList.remove("open"); $("#scrim").classList.remove("open"); }
+$("#scrim").onclick = closeDrawer;
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDrawer(); });
+
+// ------------------------------------------------------------ compare
+const LOWER_IS_BETTER = ["Client errors (4xx)", "Server errors (5xx)", "Fetch errors", "Avg response (ms)", "No title", "No meta description",
+  "No H1", "Multiple H1", "Duplicate titles (pages)", "Duplicate meta (pages)", "Under 250 words", "Images without alt", "JS-dependent pages", "Orphan pages"];
+async function viewCompare(token, h, a, b) {
+  const c = await api(`/api/compare/${encodeURIComponent(h)}/${encodeURIComponent(a)}/${encodeURIComponent(b)}`);
+  if (token !== viewToken) return;
+  const label = r => when(r.replace(/_(\d\d)(\d\d)(\d\d)$/, "T$1:$2:$3"));
+  const runLink = r => `<a href="#/run/${encodeURIComponent(h)}/${encodeURIComponent(r)}">${esc(label(r))}</a>`;
+  const deltaCell = m => {
+    if (m.delta == null || m.delta === 0) return `<td class="n muted">${m.delta === 0 ? "no change" : "—"}</td>`;
+    const good = LOWER_IS_BETTER.includes(m.label) ? m.delta < 0 : null;
+    return `<td class="n ${good === null ? "" : good ? "delta-good" : "delta-bad"}">${m.delta > 0 ? "+" : ""}${num(m.delta)}</td>`;
+  };
+  const fields = [...new Set(c.changes.map(x => x.field))];
+  const list = (items, empty) => items.length ? `<ul class="plain">${items.slice(0, 300).map(x =>
+    `<li><span class="mono">${esc(x.url)}</span> <span class="${statusClass(x.status)} mono">${esc(x.status ?? "")}</span></li>`).join("")}</ul>` : `<span class="muted">${empty}</span>`;
+  app.innerHTML = `<p class="muted mono" style="margin:0 0 6px"><a href="#/sites">Sites</a> / <a href="#/site/${encodeURIComponent(h)}">${esc(h)}</a> /</p>
+    <h1>What changed</h1><p class="sub">${runLink(a)} &nbsp;→&nbsp; ${runLink(b)}</p>
+    ${c.both_complete ? "" : `<div class="note warn">${!c.a_complete && !c.b_complete ? "Neither crawl" : !c.a_complete ? "The earlier crawl" : "The later crawl"} finished — it hit its page cap. Pages listed as new or removed may just have been reached in one crawl and not the other.</div>`}
+    <div class="tw"><table><thead><tr><th>Measure</th><th class="n">Before</th><th class="n">After</th><th class="n">Change</th></tr></thead><tbody>` +
+    c.metrics.map(m => `<tr><td>${esc(m.label)}</td><td class="n">${num(m.a)}</td><td class="n">${num(m.b)}</td>${deltaCell(m)}</tr>`).join("") + `</tbody></table></div>
+    <section class="grid g2">
+      <div class="panel"><h3>New pages (${num(c.added.length)})</h3>${list(c.added, "None")}</div>
+      <div class="panel"><h3>Pages gone (${num(c.removed.length)})</h3>${list(c.removed, "None")}</div>
+    </section>
+    <section><div class="spread"><h2 style="margin:0">Changed on the same page (${num(c.changes.length)})</h2>
+      ${fields.length > 1 ? `<select id="cf"><option value="">All changes</option>${fields.map(f => `<option>${esc(f)}</option>`).join("")}</select>` : ""}</div>
+      <div id="clist"></div></section>`;
+  const draw = () => {
+    const f = $("#cf")?.value || "";
+    const rows = c.changes.filter(x => !f || x.field === f);
+    $("#clist").innerHTML = rows.length ? `<div class="tw"><table><thead><tr><th>Page</th><th>What</th><th>Before</th><th>After</th></tr></thead><tbody>` +
+      rows.slice(0, 500).map(x => `<tr><td class="url">${esc(x.url)}</td><td>${esc(x.field)}</td><td>${esc(x.a ?? "—")}</td><td style="color:var(--ink)">${esc(x.b ?? "—")}</td></tr>`).join("") +
+      `</tbody></table></div>${rows.length > 500 ? `<p class="hint">Showing the first 500.</p>` : ""}` : `<div class="panel empty">No title, meta, H1, canonical, status or noindex changes on pages present in both crawls.</div>`;
+  };
+  if ($("#cf")) $("#cf").onchange = draw;
+  draw();
+}
+
+route();
+poll();
+</script>
+</body>
+</html>
